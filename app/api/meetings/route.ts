@@ -1,36 +1,36 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
-// GET all meetings for logged-in user
 export async function GET() {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("meetings").select("*").order("created_at", { ascending: false });
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data, error } = await supabase
-    .from('meetings')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('date', { ascending: false })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+    return NextResponse.json({ success: true, meetings: data });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
 }
 
-// POST create a new meeting
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const supabase = await createClient();
+    const body = await request.json();
 
-  const body = await request.json()
-  const { data, error } = await supabase
-    .from('meetings')
-    .insert({ ...body, user_id: user.id })
-    .select()
-    .single()
+    const { data, error } = await supabase.from("meetings").insert([body]).select().single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ success: true, meeting: data });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
 }
