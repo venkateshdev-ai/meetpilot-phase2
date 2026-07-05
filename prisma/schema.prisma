@@ -1,0 +1,268 @@
+// MeetPilot data model
+// Design principles:
+// 1. Every business table is scoped by orgId -> hard multi-tenancy boundary, enforced in the
+//    data-access layer (src/lib/db/*), not just at the app layer.
+// 2. Role is stored on OrgMembership (a user can belong to multiple orgs with different roles),
+//    not on User -> avoids the common "role is global" mistake that blocks multi-org scale.
+// 3. Integration credentials are stored per-org, never per-user, and are referenced (not inlined)
+//    from ActionItem so ticket-push audit trail survives integration reconnects.
+// 4. AuditLog is append-only and indexed by orgId + createdAt for compliance/reporting queries.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ORG_ADMIN
+  TEAM_LEAD
+  MEMBER
+  GUEST
+}
+
+enum MeetingType {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ActionItemStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum IntegrationProvider {
+  JIRA
+  ASANA
+  LINEAR
+}
+
+enum BookingStatus {
+  BOOKED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  NO_SHOW
+}
+
+model Org {
+  id           String         @id @default(cuid())
+  name         String
+  slug         String         @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  memberships  OrgMembership[]
+  rooms        Room[]
+  meetings     Meeting[]
+  integrations Integration[]
+  auditLogs    AuditLog[]
+  inviteCodes  InviteCode[]
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  avatarUrl     String?
+  passwordHash  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  memberships       OrgMembership[]
+  createdMeetings   Meeting[]        @relation("MeetingCreatedBy")
+  participations     MeetingParticipant[]
+  assignedActions    ActionItem[]     @relation("ActionAssignee")
+  bookings           RoomBooking[]    @relation("BookingCreatedBy")
+  auditLogs          AuditLog[]
+  connectedIntegrations Integration[] @relation("IntegrationConnectedBy")
+
+  @@index([email])
+}
+
+// A user's membership + role within one org. This is the enterprise-correct place for RBAC.
+model OrgMembership {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId, role])
+}
+
+model InviteCode {
+  id        String   @id @default(cuid())
+  orgId     String
+  code      String   @unique
+  role      Role     @default(MEMBER)
+  expiresAt DateTime?
+  usesLeft  Int?
+  createdAt DateTime @default(now())
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  orgId      String
+  name       String
+  capacity   Int
+  areaSqft   Int?
+  amenities  String[] @default([])
+  tariffPerHour Decimal? @db.Decimal(10, 2)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  org      Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  bookings RoomBooking[]
+
+  @@index([orgId])
+}
+
+model RoomBooking {
+  id          String        @id @default(cuid())
+  roomId      String
+  meetingId   String?       @unique
+  createdById String
+  startTime   DateTime
+  endTime     DateTime
+  status      BookingStatus @default(BOOKED)
+  checkInAt   DateTime?
+  checkOutAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  createdBy User     @relation("BookingCreatedBy", fields: [createdById], references: [id])
+
+  @@index([roomId, startTime])
+}
+
+model Meeting {
+  id           String        @id @default(cuid())
+  orgId        String
+  title        String
+  type         MeetingType
+  status       MeetingStatus @default(SCHEDULED)
+  agenda       String?
+  meetLink     String?
+  startTime    DateTime
+  endTime      DateTime
+  createdById  String
+  // Stable hash of the sorted participant user-id set, used for MoM recall:
+  // "has this exact group met before?" without an expensive join at read time.
+  participantSetHash String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  org          Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdBy    User                 @relation("MeetingCreatedBy", fields: [createdById], references: [id])
+  participants MeetingParticipant[]
+  roomBooking  RoomBooking?
+  summary      MeetingSummary?
+  actionItems  ActionItem[]
+
+  @@index([orgId, startTime])
+  @@index([participantSetHash])
+}
+
+model MeetingParticipant {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+}
+
+model MeetingSummary {
+  id                String   @id @default(cuid())
+  meetingId         String   @unique
+  executiveSummary  String?
+  keyDecisions       String[] @default([])
+  sentimentTrend     Json?    // [{ tMinutes, score }]
+  talkTimeByUser     Json?    // { userId: minutes }
+  meetingRoiPercent  Int?
+  topicsJson         Json?    // [{ topic, weight }]
+  consentGiven       Boolean  @default(false)
+  generatedAt        DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model ActionItem {
+  id            String            @id @default(cuid())
+  meetingId     String
+  description   String
+  assigneeId    String?
+  dueDate       DateTime?
+  status        ActionItemStatus  @default(OPEN)
+  syncedProvider IntegrationProvider?
+  syncedTicketId String?
+  syncedTicketUrl String?
+  syncedStatus   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("ActionAssignee", fields: [assigneeId], references: [id])
+
+  @@index([meetingId])
+  @@index([assigneeId, status])
+}
+
+// Per-org OAuth connection to a PM tool. Tokens are encrypted at the application layer
+// before being written here (see src/lib/integrations/crypto.ts) — never store plaintext.
+model Integration {
+  id                 String              @id @default(cuid())
+  orgId              String
+  provider           IntegrationProvider
+  accessTokenEnc     String
+  refreshTokenEnc    String?
+  scope              String?
+  expiresAt          DateTime?
+  connectedById      String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  org         Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connectedBy User @relation("IntegrationConnectedBy", fields: [connectedById], references: [id])
+
+  @@unique([orgId, provider])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  actorId   String?
+  action    String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  org   Org   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([orgId, createdAt])
+}
