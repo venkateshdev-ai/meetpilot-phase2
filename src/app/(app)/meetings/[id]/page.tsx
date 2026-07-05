@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { notFound } from "next/navigation";
-import { History, ShieldCheck, Send } from "lucide-react";
+import { History, ShieldCheck, Send, Video, Mic, Building2 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
@@ -10,6 +10,7 @@ import {
 import { Card, Badge, Tabs, Avatar, Button, Modal } from "@/components/ui";
 import {
   getMeeting, findPreviousMeetingForGroup, listActionItemsForMeeting, getUser,
+  listTranscriptForMeeting,
 } from "@/lib/mock/store";
 
 const PIE_COLORS = ["#6d5bf8", "#2e5aac", "#22c55e", "#f59e0b", "#ef4444"];
@@ -22,18 +23,30 @@ export default function MeetingHubPage({ params }: { params: { id: string } }) {
   const meeting = getMeeting(params.id);
   const [pushModalItem, setPushModalItem] = useState<string | null>(null);
   const [pushed, setPushed] = useState<Record<string, string>>({});
+  const [crmModalOpen, setCrmModalOpen] = useState(false);
+  const [loggedToCrm, setLoggedToCrm] = useState<string | null>(null);
 
   if (!meeting) return notFound();
 
   const previous = findPreviousMeetingForGroup(meeting);
   const actionItems = listActionItemsForMeeting(meeting.id);
+  const transcript = listTranscriptForMeeting(meeting.id);
   const s = meeting.summary;
 
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-1 flex items-center justify-between">
         <h1 className="text-2xl font-bold">{meeting.title}</h1>
-        <Badge tone={meeting.status === "COMPLETED" ? "success" : "accent"}>{meeting.status.replace("_", " ")}</Badge>
+        <div className="flex items-center gap-2">
+          {loggedToCrm ? (
+            <Badge tone="accent">Logged to {loggedToCrm}</Badge>
+          ) : (
+            <Button variant="secondary" onClick={() => setCrmModalOpen(true)}>
+              <span className="flex items-center gap-1.5"><Building2 size={13} /> Log to CRM</span>
+            </Button>
+          )}
+          <Badge tone={meeting.status === "COMPLETED" ? "success" : "accent"}>{meeting.status.replace("_", " ")}</Badge>
+        </div>
       </div>
       <p className="mb-5 text-sm text-slate-400">
         {new Date(meeting.startTime).toLocaleString()} · {meeting.type}
@@ -68,6 +81,66 @@ export default function MeetingHubPage({ params }: { params: { id: string } }) {
 
       <Tabs
         tabs={[
+          {
+            key: "call",
+            label: "Call",
+            content: (
+              <div className="space-y-4">
+                <Card>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="text-sm font-semibold">Video call</h4>
+                    <a href={meeting.meetLink ?? "#"} target="_blank" rel="noreferrer">
+                      <Button>
+                        <span className="flex items-center gap-1.5"><Video size={14} /> Join call</span>
+                      </Button>
+                    </a>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {meeting.participantIds.map((id) => {
+                      const p = getUser(id);
+                      if (!p) return null;
+                      return (
+                        <div key={id} className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl bg-base-900">
+                          <Avatar name={p.name} color={p.avatarColor} size={36} />
+                          <span className="text-xs text-slate-400">{p.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Hosted via {meeting.callProvider ?? "MeetPilot Video"}. This is a placeholder grid — a real
+                    build wires this to a WebRTC/video SDK (Daily.co, Twilio Video, LiveKit).
+                  </p>
+                </Card>
+                <Card>
+                  <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
+                    <Mic size={14} /> Live transcript
+                  </h4>
+                  {transcript.length === 0 ? (
+                    <p className="text-sm text-slate-400">
+                      Transcript will appear here once the call starts real-time transcription (mock).
+                    </p>
+                  ) : (
+                    <div className="max-h-64 space-y-3 overflow-y-auto">
+                      {transcript.map((seg, i) => {
+                        const speaker = getUser(seg.speakerUserId);
+                        return (
+                          <div key={i} className="flex items-start gap-2 text-sm">
+                            {speaker && <Avatar name={speaker.name} color={speaker.avatarColor} size={20} />}
+                            <div>
+                              <span className="mr-1.5 text-xs text-slate-500">{seg.tMinutes.toFixed(1)}m</span>
+                              <span className="font-medium text-slate-200">{speaker?.name ?? "Unknown"}:</span>{" "}
+                              <span className="text-slate-300">{seg.text}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              </div>
+            ),
+          },
           {
             key: "agenda",
             label: "Agenda",
@@ -229,6 +302,24 @@ export default function MeetingHubPage({ params }: { params: { id: string } }) {
           },
         ]}
       />
+
+      <Modal open={crmModalOpen} onClose={() => setCrmModalOpen(false)} title="Log meeting to CRM">
+        <p className="mb-4 text-sm text-slate-400">Choose a CRM. Meeting title, attendees, and summary carry over automatically.</p>
+        <div className="flex flex-col gap-2">
+          {["Salesforce", "HubSpot"].map((tool) => (
+            <button
+              key={tool}
+              onClick={() => {
+                setLoggedToCrm(tool);
+                setCrmModalOpen(false);
+              }}
+              className="rounded-xl border border-base-700 px-4 py-3 text-left text-sm hover:border-accent-500 hover:bg-accent-500/10"
+            >
+              Log to <span className="font-medium">{tool}</span>
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       <Modal open={!!pushModalItem} onClose={() => setPushModalItem(null)} title="Push action item">
         <p className="mb-4 text-sm text-slate-400">Choose a destination tool. Assignee and description carry over automatically.</p>

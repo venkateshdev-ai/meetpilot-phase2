@@ -2,11 +2,13 @@
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Card } from "@/components/ui";
-import { orgWideAnalytics } from "@/lib/mock/store";
+import { orgWideAnalytics, roomUtilization, deskUtilizationByFloor } from "@/lib/mock/store";
 
 export default function AnalyticsPage() {
   const stats = orgWideAnalytics();
   const statusData = Object.entries(stats.statusCounts).map(([status, count]) => ({ status, count }));
+  const rooms = roomUtilization();
+  const deskFloors = deskUtilizationByFloor();
 
   return (
     <div>
@@ -52,6 +54,29 @@ export default function AnalyticsPage() {
               <YAxis type="category" dataKey="topic" stroke="#64748b" fontSize={11} width={100} />
               <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
               <Bar dataKey="weight" fill="#2e5aac" radius={4} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <h4 className="mb-3 text-sm font-semibold">Room utilization (hrs booked this week)</h4>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={rooms} layout="vertical">
+              <XAxis type="number" stroke="#64748b" fontSize={11} />
+              <YAxis type="category" dataKey="room" stroke="#64748b" fontSize={11} width={90} />
+              <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
+              <Bar dataKey="bookedHoursThisWeek" fill="#22c55e" radius={4} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <h4 className="mb-3 text-sm font-semibold">Desk utilization by floor (today)</h4>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={deskFloors}>
+              <XAxis dataKey="floor" stroke="#64748b" fontSize={11} />
+              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
+              <Bar dataKey="total" fill="#1a2138" radius={4} name="Total desks" />
+              <Bar dataKey="booked" fill="#f59e0b" radius={4} name="Booked" />
             </BarChart>
           </ResponsiveContainer>
         </Card>

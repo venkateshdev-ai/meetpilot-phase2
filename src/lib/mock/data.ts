@@ -15,7 +15,11 @@ export type Role = "ORG_ADMIN" | "TEAM_LEAD" | "MEMBER" | "GUEST";
 export type MeetingType = "ONLINE" | "OFFLINE" | "HYBRID";
 export type MeetingStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ActionItemStatus = "OPEN" | "IN_PROGRESS" | "DONE" | "BLOCKED";
-export type IntegrationProvider = "JIRA" | "ASANA" | "LINEAR";
+export type IntegrationProvider =
+  | "JIRA" | "ASANA" | "LINEAR"
+  | "GOOGLE_CALENDAR" | "OUTLOOK_CALENDAR" | "SLACK" | "SALESFORCE" | "HUBSPOT" | "STRIPE";
+export type VisitorStatus = "INVITED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED";
+export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "OVERDUE";
 
 export interface DemoUser {
   id: string;
@@ -32,10 +36,59 @@ export interface DemoRoom {
   name: string;
   capacity: number;
   areaSqft: number;
+  floor: string;
+  zone: string;
   tariffPerHour: number;
   amenities: string[];
   rating: number;
   reviews: { author: string; text: string }[];
+}
+
+export interface DemoDesk {
+  id: string;
+  label: string;
+  floor: string;
+  zone: string;
+  amenities: string[];
+  isActive: boolean;
+}
+
+export interface DemoDeskBooking {
+  id: string;
+  deskId: string;
+  userId: string;
+  date: string;
+  status: "BOOKED" | "CHECKED_IN" | "CHECKED_OUT" | "CANCELLED" | "NO_SHOW";
+}
+
+export interface DemoVisitor {
+  id: string;
+  name: string;
+  email: string;
+  hostUserId: string;
+  purpose: string;
+  badgeCode: string | null;
+  status: VisitorStatus;
+  expectedAt: string;
+  checkedInAt: string | null;
+}
+
+export interface DemoInvoice {
+  id: string;
+  number: string;
+  description: string;
+  amount: number;
+  currency: string;
+  status: InvoiceStatus;
+  issuedAt: string;
+  dueAt: string | null;
+}
+
+export interface DemoTranscriptSegment {
+  meetingId: string;
+  speakerUserId: string;
+  text: string;
+  tMinutes: number;
 }
 
 export interface DemoActionItem {
@@ -68,6 +121,7 @@ export interface DemoMeeting {
   status: MeetingStatus;
   agenda: string[];
   meetLink: string | null;
+  callProvider: string | null;
   roomId: string | null;
   startTime: string;
   endTime: string;
@@ -106,6 +160,8 @@ export const DEMO_ROOMS: DemoRoom[] = [
     name: "Shivaji Room",
     capacity: 20,
     areaSqft: 120,
+    floor: "3rd Floor",
+    zone: "West Wing, near the elevator",
     tariffPerHour: 2398,
     amenities: ["4K Display", "Whiteboard", "Video Bar", "Soundproof"],
     rating: 4.6,
@@ -116,6 +172,8 @@ export const DEMO_ROOMS: DemoRoom[] = [
     name: "Tagor Room",
     capacity: 8,
     areaSqft: 70,
+    floor: "3rd Floor",
+    zone: "East Wing, next to the pantry",
     tariffPerHour: 1299,
     amenities: ["TV Screen", "Whiteboard"],
     rating: 4.2,
@@ -126,6 +184,8 @@ export const DEMO_ROOMS: DemoRoom[] = [
     name: "Ashoka Room",
     capacity: 12,
     areaSqft: 95,
+    floor: "4th Floor",
+    zone: "North Wing, opposite reception",
     tariffPerHour: 1799,
     amenities: ["4K Display", "Video Bar"],
     rating: 4.4,
@@ -136,6 +196,8 @@ export const DEMO_ROOMS: DemoRoom[] = [
     name: "Ramana Room",
     capacity: 4,
     areaSqft: 40,
+    floor: "4th Floor",
+    zone: "South Wing, near the stairwell",
     tariffPerHour: 699,
     amenities: ["Monitor"],
     rating: 4.0,
@@ -157,6 +219,7 @@ export const DEMO_MEETINGS: DemoMeeting[] = [
     status: "COMPLETED",
     agenda: ["Choosing the color palette", "Making it available in French, English, others", "Answering users by crawling company info"],
     meetLink: "https://meet.google.com/abc-defg-hij",
+    callProvider: "MeetPilot Video (mock)",
     roomId: null,
     startTime: "2025-12-12T10:00:00.000Z",
     endTime: "2025-12-12T10:45:00.000Z",
@@ -192,6 +255,7 @@ export const DEMO_MEETINGS: DemoMeeting[] = [
     status: "COMPLETED",
     agenda: ["Review unified API strategy", "Confirm OAuth 2.0 standard", "Decide MVP integration target"],
     meetLink: "https://meet.google.com/xyz-uvwx-rst",
+    callProvider: "MeetPilot Video (mock)",
     roomId: null,
     startTime: "2026-02-01T10:00:00.000Z",
     endTime: "2026-02-01T10:30:00.000Z",
@@ -228,6 +292,7 @@ export const DEMO_MEETINGS: DemoMeeting[] = [
     status: "SCHEDULED",
     agenda: ["Review sprint burndown", "Groom backlog", "Assign carryover"],
     meetLink: "https://meet.google.com/ppp-qqqq-rrr",
+    callProvider: "MeetPilot Video (mock)",
     roomId: "r_tagor",
     startTime: "2026-07-06T14:30:00.000Z",
     endTime: "2026-07-06T15:15:00.000Z",
@@ -251,6 +316,60 @@ export const DEMO_INTEGRATIONS: DemoIntegration[] = [
   { provider: "LINEAR", connected: true, connectedBy: "Varan", connectedAt: "2026-01-15" },
   { provider: "JIRA", connected: true, connectedBy: "Hulk", connectedAt: "2026-01-20" },
   { provider: "ASANA", connected: false, connectedBy: null, connectedAt: null },
+  { provider: "GOOGLE_CALENDAR", connected: true, connectedBy: "Varan", connectedAt: "2026-03-02" },
+  { provider: "OUTLOOK_CALENDAR", connected: false, connectedBy: null, connectedAt: null },
+  { provider: "SLACK", connected: true, connectedBy: "Hulk", connectedAt: "2026-03-10" },
+  { provider: "SALESFORCE", connected: false, connectedBy: null, connectedAt: null },
+  { provider: "HUBSPOT", connected: false, connectedBy: null, connectedAt: null },
+  { provider: "STRIPE", connected: false, connectedBy: null, connectedAt: null },
+];
+
+// ---------------------------------------------------------------------------
+// Desk booking (hot-desking)
+// ---------------------------------------------------------------------------
+export const DEMO_DESKS: DemoDesk[] = [
+  { id: "d_1", label: "Desk A1", floor: "3rd Floor", zone: "Window row, West Wing", amenities: ["Dual Monitor", "Docking Station"], isActive: true },
+  { id: "d_2", label: "Desk A2", floor: "3rd Floor", zone: "Window row, West Wing", amenities: ["Docking Station"], isActive: true },
+  { id: "d_3", label: "Desk B1", floor: "3rd Floor", zone: "Quiet zone, East Wing", amenities: ["Standing Desk", "Dual Monitor"], isActive: true },
+  { id: "d_4", label: "Desk C1", floor: "4th Floor", zone: "Collab area, North Wing", amenities: ["Docking Station"], isActive: true },
+  { id: "d_5", label: "Desk C2", floor: "4th Floor", zone: "Collab area, North Wing", amenities: ["Standing Desk"], isActive: true },
+  { id: "d_6", label: "Desk D1", floor: "4th Floor", zone: "Quiet zone, South Wing", amenities: ["Dual Monitor"], isActive: false },
+];
+
+export const DEMO_DESK_BOOKINGS: DemoDeskBooking[] = [
+  { id: "db_1", deskId: "d_1", userId: "u_varan", date: "2026-07-04", status: "CHECKED_IN" },
+  { id: "db_2", deskId: "d_3", userId: "u_thor", date: "2026-07-04", status: "BOOKED" },
+  { id: "db_3", deskId: "d_4", userId: "u_hulk", date: "2026-07-04", status: "BOOKED" },
+  { id: "db_4", deskId: "d_2", userId: "u_batman", date: "2026-07-03", status: "CHECKED_OUT" },
+];
+
+// ---------------------------------------------------------------------------
+// Visitor management
+// ---------------------------------------------------------------------------
+export const DEMO_VISITORS: DemoVisitor[] = [
+  { id: "v_1", name: "Priya Sharma", email: "priya@clientco.com", hostUserId: "u_varan", purpose: "Product demo — Sprint Sync", badgeCode: "VIS-4821", status: "CHECKED_IN", expectedAt: "2026-07-04T09:30:00.000Z", checkedInAt: "2026-07-04T09:34:00.000Z" },
+  { id: "v_2", name: "Alex Chen", email: "alex@partnerlabs.io", hostUserId: "u_hulk", purpose: "Partnership discussion", badgeCode: "VIS-4822", status: "INVITED", expectedAt: "2026-07-06T14:00:00.000Z", checkedInAt: null },
+  { id: "v_3", name: "Meera Rao", email: "meera@vendor.com", hostUserId: "u_batman", purpose: "Vendor onboarding", badgeCode: null, status: "CHECKED_OUT", expectedAt: "2026-07-02T11:00:00.000Z", checkedInAt: "2026-07-02T11:05:00.000Z" },
+];
+
+// ---------------------------------------------------------------------------
+// Billing / invoicing
+// ---------------------------------------------------------------------------
+export const DEMO_INVOICES: DemoInvoice[] = [
+  { id: "inv_1", number: "INV-1042", description: "Shivaji Room — 8 hrs (June)", amount: 19184, currency: "INR", status: "PAID", issuedAt: "2026-06-30", dueAt: "2026-07-07" },
+  { id: "inv_2", number: "INV-1043", description: "Desk bookings — 12 desk-days (June)", amount: 6000, currency: "INR", status: "SENT", issuedAt: "2026-07-01", dueAt: "2026-07-15" },
+  { id: "inv_3", number: "INV-1044", description: "Ashoka Room — 3 hrs (July, in progress)", amount: 5397, currency: "INR", status: "DRAFT", issuedAt: "2026-07-04", dueAt: null },
+];
+
+// ---------------------------------------------------------------------------
+// Live transcript (mock feed for the meeting "Call" tab)
+// ---------------------------------------------------------------------------
+export const DEMO_TRANSCRIPT: DemoTranscriptSegment[] = [
+  { meetingId: "m_automation_review", speakerUserId: "u_hulk", text: "Let's start with the unified API strategy — I think one abstraction layer across Jira, Asana, and Linear is the right call.", tMinutes: 0.5 },
+  { meetingId: "m_automation_review", speakerUserId: "u_varan", text: "Agreed. That also cuts our initial dev time by something like 40%.", tMinutes: 1.2 },
+  { meetingId: "m_automation_review", speakerUserId: "u_batman", text: "What about auth? We can't have three different OAuth flows.", tMinutes: 2.0 },
+  { meetingId: "m_automation_review", speakerUserId: "u_ironman", text: "OAuth 2.0 standard across all three, I'll draft the token refresh spec.", tMinutes: 2.6 },
+  { meetingId: "m_automation_review", speakerUserId: "u_hulk", text: "For MVP, let's prioritize Linear first — GraphQL API means fastest working demo.", tMinutes: 3.4 },
 ];
 
 export function currentUser(): DemoUser {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
-import { listUsers, listIntegrations, listRooms } from "@/lib/mock/store";
+import { listUsers, listIntegrations, listRooms, listDesks, listVisitors } from "@/lib/mock/store";
 import { can, Role } from "@/lib/rbac";
 
 // This whole page is the module the PRD flagged as completely missing from
@@ -12,6 +12,8 @@ export default function AdminPage() {
   const users = listUsers();
   const integrations = listIntegrations();
   const rooms = listRooms();
+  const desks = listDesks();
+  const visitors = listVisitors();
   const [connected, setConnected] = useState<Record<string, boolean>>(
     Object.fromEntries(integrations.map((i) => [i.provider, i.connected]))
   );
@@ -53,8 +55,11 @@ export default function AdminPage() {
 
       <section id="settings">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Integrations (OAuth 2.0)
+          Integrations & connected apps (OAuth 2.0)
         </h2>
+        <p className="mb-3 -mt-2 text-xs text-slate-500">
+          PM tools, calendar sync, team chat, CRM logging, and payments — each connection is a per-org OAuth grant.
+        </p>
         <Card className="divide-y divide-base-700 p-0">
           {integrations.map((i) => (
             <div key={i.provider} className="flex items-center justify-between p-4">
@@ -86,9 +91,41 @@ export default function AdminPage() {
             <div key={r.id} className="flex items-center justify-between p-4">
               <div>
                 <div className="text-sm font-medium">{r.name}</div>
-                <div className="text-xs text-slate-500">{r.capacity} seats · ₹{r.tariffPerHour}/hr</div>
+                <div className="text-xs text-slate-500">{r.floor} · {r.capacity} seats · ₹{r.tariffPerHour}/hr</div>
               </div>
               <Badge>Active</Badge>
+            </div>
+          ))}
+        </Card>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Desk inventory</h2>
+        <Card className="divide-y divide-base-700 p-0">
+          {desks.map((d) => (
+            <div key={d.id} className="flex items-center justify-between p-4">
+              <div>
+                <div className="text-sm font-medium">{d.label}</div>
+                <div className="text-xs text-slate-500">{d.floor} · {d.zone}</div>
+              </div>
+              <Badge tone={d.isActive ? "neutral" : "danger"}>{d.isActive ? "Active" : "Out of service"}</Badge>
+            </div>
+          ))}
+        </Card>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Visitor log</h2>
+        <Card className="divide-y divide-base-700 p-0">
+          {visitors.map((v) => (
+            <div key={v.id} className="flex items-center justify-between p-4">
+              <div>
+                <div className="text-sm font-medium">{v.name}</div>
+                <div className="text-xs text-slate-500">{v.purpose}</div>
+              </div>
+              <Badge tone={v.status === "CHECKED_IN" ? "success" : v.status === "CANCELLED" ? "danger" : "neutral"}>
+                {v.status.replace("_", " ")}
+              </Badge>
             </div>
           ))}
         </Card>

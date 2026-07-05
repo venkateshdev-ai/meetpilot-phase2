@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Users as UsersIcon, Ruler } from "lucide-react";
+import { Star, Users as UsersIcon, Ruler, MapPin } from "lucide-react";
 import { Card, Badge, Button, Modal } from "@/components/ui";
 import { listRooms } from "@/lib/mock/store";
 
@@ -27,9 +27,12 @@ export default function RoomsPage() {
                 <Star size={12} fill="currentColor" /> {r.rating}
               </span>
             </div>
-            <div className="mb-3 flex gap-4 text-xs text-slate-400">
+            <div className="mb-2 flex gap-4 text-xs text-slate-400">
               <span className="flex items-center gap-1"><UsersIcon size={13} /> {r.capacity} seats</span>
               <span className="flex items-center gap-1"><Ruler size={13} /> {r.areaSqft} sqft</span>
+            </div>
+            <div className="mb-3 flex items-center gap-1 text-xs text-slate-500">
+              <MapPin size={12} /> {r.floor} · {r.zone}
             </div>
             <div className="mb-3 flex flex-wrap gap-1">
               {r.amenities.map((a) => (

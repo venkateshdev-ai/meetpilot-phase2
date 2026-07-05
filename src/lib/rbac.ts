@@ -14,7 +14,11 @@ export type Permission =
   | "actionitem:push_to_tool"
   | "org:manage_members"
   | "org:view_audit_log"
-  | "analytics:view_org_wide";
+  | "analytics:view_org_wide"
+  | "desk:book"
+  | "visitor:manage"
+  | "billing:view"
+  | "billing:manage";
 
 const PERMISSIONS: Record<Role, Permission[]> = {
   ORG_ADMIN: [
@@ -28,6 +32,10 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "org:manage_members",
     "org:view_audit_log",
     "analytics:view_org_wide",
+    "desk:book",
+    "visitor:manage",
+    "billing:view",
+    "billing:manage",
   ],
   TEAM_LEAD: [
     "meeting:create",
@@ -35,8 +43,11 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "room:book",
     "actionitem:push_to_tool",
     "analytics:view_org_wide",
+    "desk:book",
+    "visitor:manage",
+    "billing:view",
   ],
-  MEMBER: ["meeting:create", "room:book", "actionitem:push_to_tool"],
+  MEMBER: ["meeting:create", "room:book", "actionitem:push_to_tool", "desk:book"],
   GUEST: ["room:book"],
 };
 

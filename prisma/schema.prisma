@@ -48,6 +48,26 @@ enum IntegrationProvider {
   JIRA
   ASANA
   LINEAR
+  GOOGLE_CALENDAR
+  OUTLOOK_CALENDAR
+  SLACK
+  SALESFORCE
+  HUBSPOT
+  STRIPE
+}
+
+enum VisitorStatus {
+  INVITED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
 }
 
 enum BookingStatus {
@@ -67,10 +87,13 @@ model Org {
 
   memberships  OrgMembership[]
   rooms        Room[]
+  desks        Desk[]
   meetings     Meeting[]
   integrations Integration[]
   auditLogs    AuditLog[]
   inviteCodes  InviteCode[]
+  visitors     Visitor[]
+  invoices     Invoice[]
 }
 
 model User {
@@ -89,6 +112,9 @@ model User {
   bookings           RoomBooking[]    @relation("BookingCreatedBy")
   auditLogs          AuditLog[]
   connectedIntegrations Integration[] @relation("IntegrationConnectedBy")
+  deskBookings        DeskBooking[]
+  hostedVisitors      Visitor[]        @relation("VisitorHost")
+  transcriptSegments  TranscriptSegment[]
 
   @@index([email])
 }
@@ -126,6 +152,8 @@ model Room {
   name       String
   capacity   Int
   areaSqft   Int?
+  floor      String?
+  zone       String?
   amenities  String[] @default([])
   tariffPerHour Decimal? @db.Decimal(10, 2)
   isActive   Boolean  @default(true)
@@ -152,6 +180,8 @@ model RoomBooking {
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   createdBy User     @relation("BookingCreatedBy", fields: [createdById], references: [id])
+  visitors  Visitor[]
+  invoices  Invoice[]
 
   @@index([roomId, startTime])
 }
@@ -167,6 +197,11 @@ model Meeting {
   startTime    DateTime
   endTime      DateTime
   createdById  String
+  // Video-call hosting details. Phase 1 stores a provider name + join URL only;
+  // actually hosting a call requires a real WebRTC/video SDK (Daily.co, Twilio
+  // Video, LiveKit) — see README "Going to production".
+  callProvider String?
+  callJoinUrl  String?
   // Stable hash of the sorted participant user-id set, used for MoM recall:
   // "has this exact group met before?" without an expensive join at read time.
   participantSetHash String?
@@ -179,6 +214,7 @@ model Meeting {
   roomBooking  RoomBooking?
   summary      MeetingSummary?
   actionItems  ActionItem[]
+  transcript   TranscriptSegment[]
 
   @@index([orgId, startTime])
   @@index([participantSetHash])
@@ -249,6 +285,103 @@ model Integration {
   connectedBy User @relation("IntegrationConnectedBy", fields: [connectedById], references: [id])
 
   @@unique([orgId, provider])
+}
+
+// Hot-desk (as opposed to a bookable meeting Room). Distinct model because desks
+// are booked per-day by a single user, not per-timeslot by a meeting.
+model Desk {
+  id        String   @id @default(cuid())
+  orgId     String
+  label     String
+  floor     String
+  zone      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  org      Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  bookings DeskBooking[]
+
+  @@index([orgId])
+}
+
+model DeskBooking {
+  id          String        @id @default(cuid())
+  deskId      String
+  userId      String
+  date        DateTime
+  startTime   DateTime
+  endTime     DateTime
+  status      BookingStatus @default(BOOKED)
+  checkInAt   DateTime?
+  checkOutAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  desk Desk @relation(fields: [deskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([deskId, date])
+}
+
+// Front-desk / visitor management. Optionally attached to a RoomBooking so the
+// host's meeting shows "1 external guest checking in" automatically.
+model Visitor {
+  id            String        @id @default(cuid())
+  orgId         String
+  name          String
+  email         String
+  hostUserId    String
+  roomBookingId String?
+  purpose       String?
+  badgeCode     String?
+  status        VisitorStatus @default(INVITED)
+  expectedAt    DateTime
+  checkedInAt   DateTime?
+  checkedOutAt  DateTime?
+  createdAt     DateTime      @default(now())
+
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  host        User         @relation("VisitorHost", fields: [hostUserId], references: [id])
+  roomBooking RoomBooking? @relation(fields: [roomBookingId], references: [id])
+
+  @@index([orgId, expectedAt])
+}
+
+// Invoicing for paid/external room or desk usage. Real implementation charges
+// via Stripe Billing and this table mirrors the resulting invoice object.
+model Invoice {
+  id            String        @id @default(cuid())
+  orgId         String
+  number        String        @unique
+  description   String
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("INR")
+  status        InvoiceStatus @default(DRAFT)
+  issuedAt      DateTime      @default(now())
+  dueAt         DateTime?
+  roomBookingId String?
+  createdAt     DateTime      @default(now())
+
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  roomBooking RoomBooking? @relation(fields: [roomBookingId], references: [id])
+
+  @@index([orgId, status])
+}
+
+// Live transcript feed for a meeting's video call. Real implementation is
+// streamed in near-real-time from a transcription provider (AssemblyAI,
+// Deepgram, Whisper) via the call SDK's audio track, one segment per utterance.
+model TranscriptSegment {
+  id            String   @id @default(cuid())
+  meetingId     String
+  speakerUserId String?
+  text          String
+  tMinutes      Float
+  createdAt     DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  speaker User?   @relation(fields: [speakerUserId], references: [id])
+
+  @@index([meetingId, tMinutes])
 }
 
 model AuditLog {

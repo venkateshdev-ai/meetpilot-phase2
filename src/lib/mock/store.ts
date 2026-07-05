@@ -1,6 +1,8 @@
 import {
   DEMO_USERS, DEMO_ROOMS, DEMO_MEETINGS, DEMO_ACTION_ITEMS, DEMO_INTEGRATIONS,
+  DEMO_DESKS, DEMO_DESK_BOOKINGS, DEMO_VISITORS, DEMO_INVOICES, DEMO_TRANSCRIPT,
   DemoUser, DemoRoom, DemoMeeting, DemoActionItem, DemoIntegration, currentUser,
+  DemoDesk, DemoDeskBooking, DemoVisitor, DemoInvoice, DemoTranscriptSegment,
 } from "./data";
 
 // Repository-pattern functions. Every one of these has an obvious 1:1 Prisma
@@ -61,6 +63,85 @@ export function listActionItemsForUser(userId: string): DemoActionItem[] {
 
 export function listIntegrations(): DemoIntegration[] {
   return DEMO_INTEGRATIONS;
+}
+
+// ---------------------------------------------------------------------------
+// Desk booking (hot-desking)
+// ---------------------------------------------------------------------------
+export function listDesks(): DemoDesk[] {
+  return DEMO_DESKS; // prisma.desk.findMany({ where: { orgId, isActive: true } })
+}
+
+export function getDesk(id: string): DemoDesk | undefined {
+  return DEMO_DESKS.find((d) => d.id === id);
+}
+
+// prisma.deskBooking.findMany({ where: { desk: { orgId }, date } })
+export function listDeskBookingsForDate(date: string): DemoDeskBooking[] {
+  return DEMO_DESK_BOOKINGS.filter((b) => b.date === date);
+}
+
+export function deskUtilizationByFloor(): { floor: string; total: number; booked: number }[] {
+  const today = "2026-07-04";
+  const bookedIds = new Set(listDeskBookingsForDate(today).map((b) => b.deskId));
+  const floors = Array.from(new Set(DEMO_DESKS.map((d) => d.floor)));
+  return floors.map((floor) => {
+    const deskOnFloor = DEMO_DESKS.filter((d) => d.floor === floor && d.isActive);
+    return {
+      floor,
+      total: deskOnFloor.length,
+      booked: deskOnFloor.filter((d) => bookedIds.has(d.id)).length,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Visitor management
+// ---------------------------------------------------------------------------
+export function listVisitors(): DemoVisitor[] {
+  return [...DEMO_VISITORS].sort(
+    (a, b) => new Date(a.expectedAt).getTime() - new Date(b.expectedAt).getTime()
+  ); // prisma.visitor.findMany({ where: { orgId }, orderBy: { expectedAt: "asc" } })
+}
+
+export function getVisitor(id: string): DemoVisitor | undefined {
+  return DEMO_VISITORS.find((v) => v.id === id);
+}
+
+// ---------------------------------------------------------------------------
+// Billing / invoicing
+// ---------------------------------------------------------------------------
+export function listInvoices(): DemoInvoice[] {
+  return DEMO_INVOICES; // prisma.invoice.findMany({ where: { orgId }, orderBy: { issuedAt: "desc" } })
+}
+
+export function invoiceTotals() {
+  const paid = DEMO_INVOICES.filter((i) => i.status === "PAID").reduce((s, i) => s + i.amount, 0);
+  const outstanding = DEMO_INVOICES.filter((i) => i.status === "SENT" || i.status === "OVERDUE").reduce((s, i) => s + i.amount, 0);
+  const draft = DEMO_INVOICES.filter((i) => i.status === "DRAFT").reduce((s, i) => s + i.amount, 0);
+  return { paid, outstanding, draft };
+}
+
+// ---------------------------------------------------------------------------
+// Live transcript (video call mock)
+// ---------------------------------------------------------------------------
+// prisma.transcriptSegment.findMany({ where: { meetingId }, orderBy: { tMinutes: "asc" } })
+export function listTranscriptForMeeting(meetingId: string): DemoTranscriptSegment[] {
+  return DEMO_TRANSCRIPT.filter((t) => t.meetingId === meetingId).sort((a, b) => a.tMinutes - b.tMinutes);
+}
+
+// ---------------------------------------------------------------------------
+// Room utilization (analytics)
+// ---------------------------------------------------------------------------
+export function roomUtilization(): { room: string; bookedHoursThisWeek: number; capacity: number }[] {
+  // Deterministic mock utilization derived from each room's tariff tier, so the
+  // analytics chart has believable, stable-looking spread without random jitter.
+  // prisma equivalent: aggregate RoomBooking duration per room over the trailing 7 days.
+  return DEMO_ROOMS.map((r) => ({
+    room: r.name,
+    bookedHoursThisWeek: Math.round((r.tariffPerHour / 100) % 23) + 4,
+    capacity: 40,
+  }));
 }
 
 export function orgWideAnalytics() {

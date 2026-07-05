@@ -4,6 +4,21 @@ Unified meeting copilot + workspace booking platform. Combines Google Meet-style
 scheduling, Granola-style AI meeting memory, and WeWork/IndiQube-style room
 booking into one product, per the accompanying PRD (`MeetPilot_PRD_Gap_Analysis.docx`).
 
+## Changelog
+
+**v2 (this update)** — added the next tier of features identified in the product
+roadmap discussion, on top of the v1 MVP:
+- **Desk booking** (`/desks`) — hot-desking distinct from meeting-room booking, grouped by floor, for hybrid teams that need a seat rather than a room.
+- **Visitor management** (`/visitors`) — invite external guests, generate a badge code, front-desk check-in, host notification.
+- **Billing** (`/billing`) — invoice list (paid/outstanding/draft totals) and a Stripe "Connect" tile, gated behind the `billing:view` permission.
+- **Calendar, chat, and CRM integration tiles** — Google Calendar, Outlook Calendar, Slack, Salesforce, and HubSpot now appear as connectable OAuth tiles on `/admin`, alongside the existing Jira/Asana/Linear tiles.
+- **Video call + live transcript placeholder** — the Meeting Hub has a new "Call" tab with a mock video grid and a live transcript feed, wired to real data shapes so swapping in a real call/transcription provider is additive, not a rewrite.
+- **Utilization analytics** — `/analytics` now includes room-utilization and per-floor desk-utilization charts.
+- **Wayfinding** — room and desk cards show floor + zone ("3rd Floor · West Wing, near the elevator") so people can actually find what they booked.
+- **Slack slash-command scaffold** — `POST /api/slack/commands` parses a `/meetpilot book <room|desk>` style command and returns a mock confirmation. See the doc-comment in that file for the three things (signature verification, a registered Slack App, real DB writes) it needs before going live.
+
+**v1** — auth, org/roles, unified online/offline/hybrid booking, Meeting Hub with MoM recall, action-item push, analytics.
+
 ## What's in this repo
 
 - **Next.js 14 (App Router) + TypeScript + Tailwind** — full UI for the Phase 1 MVP:
@@ -56,6 +71,14 @@ against the seeded demo org ("Acme Industries").
 5. **Deploy**: `Dockerfile` included (multi-stage, production-ready). Any
    platform that runs a container or a Next.js app (Vercel, Fly.io, ECS, etc.)
    works.
+
+## Known limitations of the v2 additions
+
+- **Video calls** are a static mock grid, not a real call — wiring a real one means integrating a WebRTC/video SDK (Daily.co, Twilio Video, or LiveKit) and replacing the placeholder tiles with real video elements.
+- **Live transcript** is seeded mock data, not real-time — production needs a streaming transcription provider (AssemblyAI, Deepgram, or Whisper) fed from the call SDK's audio track.
+- **Slack slash command** has no signature verification yet — do not point a real Slack App at this route without adding HMAC verification first (see the comment in `src/app/api/slack/commands/route.ts`).
+- **Calendar sync tiles** (Google/Outlook) and **CRM tiles** (Salesforce/HubSpot) are OAuth-shaped UI only — no real OAuth flow or data sync is implemented yet; that's the same `Integration` model/pattern already used for Jira/Asana/Linear, just not yet backed by a real provider.
+- **Stripe billing** connect button is a UI toggle — real implementation needs Stripe Checkout/Billing API calls and webhook handling for payment status.
 
 ## Known limitations of this build
 

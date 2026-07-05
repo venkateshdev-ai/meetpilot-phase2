@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { Home, Calendar, Users, BarChart3, Settings, DoorOpen, Search } from "lucide-react";
+import { Home, Calendar, Users, BarChart3, Settings, DoorOpen, Search, Armchair, UserCheck, Receipt } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { getCurrentUser } from "@/lib/mock/store";
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/rooms", label: "Rooms", icon: DoorOpen },
+  { href: "/desks", label: "Desks", icon: Armchair },
+  { href: "/visitors", label: "Visitors", icon: UserCheck },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/billing", label: "Billing", icon: Receipt },
   { href: "/admin", label: "Admin", icon: Users },
   { href: "/admin#settings", label: "Settings", icon: Settings },
 ];
