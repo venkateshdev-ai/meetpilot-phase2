@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Home, Calendar, Users, BarChart3, Settings, DoorOpen, Search, Armchair, UserCheck, Receipt, Ticket } from "lucide-react";
+import { Home, Users, BarChart3, Settings, Search, Receipt, Ticket } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listMembershipsByRole } from "@/lib/db/store";
+import { ROLE_LABELS, Role } from "@/lib/rbac";
+import ChatSidebar from "@/components/ChatSidebar";
 
 function colorFor(id: string) {
   const AVATAR_COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#6d5bf8", "#2e5aac", "#94a3b8"];
@@ -15,14 +17,11 @@ function colorFor(id: string) {
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/rooms", label: "Rooms", icon: DoorOpen },
-  { href: "/desks", label: "Desks", icon: Armchair },
-  { href: "/visitors", label: "Visitors", icon: UserCheck },
   { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/billing", label: "Billing", icon: Receipt },
-  { href: "/admin", label: "Admin", icon: Users },
-  { href: "/admin#settings", label: "Settings", icon: Settings },
+  { href: "/users", label: "Users", icon: Users },
+  { href: "/admin", label: "Settings", icon: Settings },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -33,10 +32,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     email ? findUserByEmail(email) : Promise.resolve(undefined),
     listMembershipsByRole(),
   ]);
+  const role = (dbUser ? roleByUser[dbUser.id] : undefined) as Role | undefined;
   const user = {
     name: dbUser?.name ?? session?.user?.name ?? "Guest",
     id: dbUser?.id ?? "guest",
-    role: dbUser ? roleByUser[dbUser.id] ?? "MEMBER" : "GUEST",
+    roleLabel: role ? ROLE_LABELS[role] ?? role : "Reviewer",
   };
   return (
     <div className="flex min-h-screen">
@@ -64,11 +64,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Avatar name={user.name} color={colorFor(user.id)} size={28} />
           <div className="text-xs">
             <div className="font-medium text-slate-100">{user.name}</div>
-            <div className="text-slate-500">{user.role.replace("_", " ")}</div>
+            <div className="text-slate-500">{user.roleLabel}</div>
           </div>
         </Link>
       </aside>
-      <div className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-base-700 px-6 py-4">
           <div className="flex items-center gap-2 rounded-xl border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-400">
             <Search size={16} />
@@ -78,8 +78,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Avatar name={user.name} color={colorFor(user.id)} size={32} />
           </Link>
         </header>
-        <main className="p-6">{children}</main>
+        <main className="flex-1 p-6">{children}</main>
       </div>
+      <ChatSidebar currentUserName={user.name} />
     </div>
   );
 }

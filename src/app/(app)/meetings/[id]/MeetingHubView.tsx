@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { History, ShieldCheck, Send, Video, Mic, Building2, FileSpreadsheet } from "lucide-react";
+import { History, ShieldCheck, Send, Video, Mic, FileSpreadsheet } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar,
@@ -10,6 +10,7 @@ import {
 import { Card, Badge, Tabs, Avatar, Button, Modal } from "@/components/ui";
 import type { DbMeeting, DbActionItem, DbUser } from "@/lib/db/store";
 import UploadPanel from "./UploadPanel";
+import MomPanel from "./MomPanel";
 
 const PIE_COLORS = ["#6d5bf8", "#2e5aac", "#22c55e", "#f59e0b", "#ef4444"];
 
@@ -42,8 +43,6 @@ export default function MeetingHubView({
   const [pushModalItem, setPushModalItem] = useState<string | null>(null);
   const [actionItems, setActionItems] = useState(initialActionItems);
   const [pushingId, setPushingId] = useState<string | null>(null);
-  const [crmModalOpen, setCrmModalOpen] = useState(false);
-  const [loggedToCrm, setLoggedToCrm] = useState<string | null>(null);
   const [creatingTicketFor, setCreatingTicketFor] = useState<string | null>(null);
 
   const getUser = (id: string | null | undefined) => (id ? usersById[id] : undefined);
@@ -94,21 +93,12 @@ export default function MeetingHubView({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-1 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{meeting.title}</h1>
-        <div className="flex items-center gap-2">
-          {loggedToCrm ? (
-            <Badge tone="accent">Logged to {loggedToCrm}</Badge>
-          ) : (
-            <Button variant="secondary" onClick={() => setCrmModalOpen(true)}>
-              <span className="flex items-center gap-1.5"><Building2 size={13} /> Log to CRM</span>
-            </Button>
-          )}
-          <Badge tone={meeting.status === "COMPLETED" ? "success" : "accent"}>{meeting.status.replace("_", " ")}</Badge>
-        </div>
-      </div>
+      <h1 className="mb-1 text-2xl font-bold">{meeting.title}</h1>
       <p className="mb-5 text-sm text-slate-400">
-        {new Date(meeting.startTime).toLocaleString()} · {meeting.type}
+        {new Date(meeting.startTime).toLocaleString("en-US", {
+          month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+        })}{" "}
+        · {meeting.type}
       </p>
 
       {previous ? (
@@ -118,7 +108,7 @@ export default function MeetingHubView({
             <div className="text-sm">
               <span className="font-medium text-accent-400">MoM recall — </span>
               this exact group last met on{" "}
-              <span className="font-medium">{new Date(previous.startTime).toLocaleDateString()}</span>. Key
+              <span className="font-medium">{new Date(previous.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>. Key
               decisions carried forward are in that meeting's summary tab.
             </div>
           </div>
@@ -142,32 +132,66 @@ export default function MeetingHubView({
             label: "Call",
             content: (
               <div className="space-y-4">
-                <Card>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">Video call</h4>
-                    <a href={meeting.meetLink ?? "#"} target="_blank" rel="noreferrer">
-                      <Button>
-                        <span className="flex items-center gap-1.5"><Video size={14} /> Join call</span>
-                      </Button>
-                    </a>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {participantIds.map((id) => {
-                      const p = getUser(id);
-                      if (!p) return null;
-                      return (
-                        <div key={id} className="flex aspect-video flex-col items-center justify-center gap-2 rounded-xl bg-base-900">
-                          <Avatar name={p.name ?? p.email} color={colorFor(p.id)} size={36} />
-                          <span className="text-xs text-slate-400">{p.name}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-3 text-xs text-slate-500">
-                    Hosted via {meeting.callProvider ?? "MeetPilot Video"}. This is a placeholder grid — a real
-                    build wires this to a WebRTC/video SDK (Daily.co, Twilio Video, LiveKit).
-                  </p>
-                </Card>
+                {/* FRD "MoM Window side": live video on the left, the MoM notes
+                    panel (agenda / discussion items / action items with Done
+                    toggles + Save/Share) alongside it on the right. */}
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr,360px]">
+                  <Card>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">Video call</h4>
+                      {meeting.meetLink && (
+                        <a href={meeting.meetLink} target="_blank" rel="noreferrer">
+                          <Button>
+                            <span className="flex items-center gap-1.5"><Video size={14} /> Open in new tab</span>
+                          </Button>
+                        </a>
+                      )}
+                    </div>
+                    {participantIds.length > 0 && (
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-500">Invited:</span>
+                        {participantIds.map((id) => {
+                          const p = getUser(id);
+                          if (!p) return null;
+                          return (
+                            <span key={id} className="flex items-center gap-1.5 rounded-full bg-base-900 py-1 pl-1 pr-2.5 text-xs text-slate-300">
+                              <Avatar name={p.name ?? p.email} color={colorFor(p.id)} size={18} /> {p.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {meeting.meetLink ? (
+                      <div className="overflow-hidden rounded-xl border border-base-700 bg-base-900">
+                        <iframe
+                          src={`${meeting.meetLink}#config.prejoinPageEnabled=false`}
+                          allow="camera; microphone; fullscreen; display-capture; autoplay"
+                          className="aspect-video w-full"
+                          style={{ border: 0 }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400">
+                        This is an in-person meeting — no video room was created for it.
+                      </p>
+                    )}
+                    <p className="mt-3 text-xs text-slate-500">
+                      Hosted via {meeting.callProvider ?? "MeetPilot Video"} — a real, live video room (camera, mic,
+                      screen share, chat), free with no account needed.
+                    </p>
+                  </Card>
+                  <MomPanel
+                    meetingId={meeting.id}
+                    meetingTitle={meeting.title}
+                    initialAgenda={agenda}
+                    initialDiscussedItems={s?.keyDecisions ?? []}
+                    actionItems={actionItems}
+                    usersById={usersById}
+                    onActionItemUpdated={(updated) =>
+                      setActionItems((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+                    }
+                  />
+                </div>
                 <Card>
                   <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
                     <Mic size={14} /> Live transcript
@@ -257,7 +281,7 @@ export default function MeetingHubView({
                               <Avatar name={assignee.name ?? assignee.email} color={colorFor(assignee.id)} size={16} /> {assignee.name}
                             </span>
                           )}
-                          {item.dueDate && <span>Due {new Date(item.dueDate).toLocaleDateString()}</span>}
+                          {item.dueDate && <span>Due {new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -376,26 +400,6 @@ export default function MeetingHubView({
           },
         ]}
       />
-
-      <Modal open={crmModalOpen} onClose={() => setCrmModalOpen(false)} title="Log meeting to CRM">
-        <p className="mb-4 text-sm text-slate-400">
-          Choose a CRM. (Still mocked — Salesforce/HubSpot OAuth isn't wired up yet.)
-        </p>
-        <div className="flex flex-col gap-2">
-          {["Salesforce", "HubSpot"].map((tool) => (
-            <button
-              key={tool}
-              onClick={() => {
-                setLoggedToCrm(tool);
-                setCrmModalOpen(false);
-              }}
-              className="rounded-xl border border-base-700 px-4 py-3 text-left text-sm hover:border-accent-500 hover:bg-accent-500/10"
-            >
-              Log to <span className="font-medium">{tool}</span>
-            </button>
-          ))}
-        </div>
-      </Modal>
 
       <Modal open={!!pushModalItem} onClose={() => setPushModalItem(null)} title="Push action item">
         <p className="mb-4 text-sm text-slate-400">

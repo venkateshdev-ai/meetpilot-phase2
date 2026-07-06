@@ -356,9 +356,9 @@ export const DEMO_VISITORS: DemoVisitor[] = [
 // Billing / invoicing
 // ---------------------------------------------------------------------------
 export const DEMO_INVOICES: DemoInvoice[] = [
-  { id: "inv_1", number: "INV-1042", description: "Shivaji Room — 8 hrs (June)", amount: 19184, currency: "INR", status: "PAID", issuedAt: "2026-06-30", dueAt: "2026-07-07" },
-  { id: "inv_2", number: "INV-1043", description: "Desk bookings — 12 desk-days (June)", amount: 6000, currency: "INR", status: "SENT", issuedAt: "2026-07-01", dueAt: "2026-07-15" },
-  { id: "inv_3", number: "INV-1044", description: "Ashoka Room — 3 hrs (July, in progress)", amount: 5397, currency: "INR", status: "DRAFT", issuedAt: "2026-07-04", dueAt: null },
+  { id: "inv_1", number: "INV-1042", description: "MeetPilot Pro — 6 seats (June)", amount: 174, currency: "USD", status: "PAID", issuedAt: "2026-06-30", dueAt: "2026-07-07" },
+  { id: "inv_2", number: "INV-1043", description: "AI transcription add-on (June)", amount: 29, currency: "USD", status: "SENT", issuedAt: "2026-07-01", dueAt: "2026-07-15" },
+  { id: "inv_3", number: "INV-1044", description: "MeetPilot Pro — 6 seats (July, in progress)", amount: 174, currency: "USD", status: "DRAFT", issuedAt: "2026-07-04", dueAt: null },
 ];
 
 // ---------------------------------------------------------------------------

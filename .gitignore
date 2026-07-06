@@ -5,3 +5,5 @@ node_modules
 *.log
 .DS_Store
 dist
+.claude/settings.local.json
+tsconfig.tsbuildinfo

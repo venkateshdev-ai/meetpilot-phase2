@@ -11,7 +11,7 @@ async function requireIntegrationManager() {
   const roleByUser = me ? await listMembershipsByRole() : {};
   const myRole = (me && roleByUser[me.id]) as Role | undefined;
   if (!myRole || !can(myRole, "integration:manage")) {
-    return { error: NextResponse.json({ error: "Forbidden — only Org Admins/Team Leads can manage integrations" }, { status: 403 }) };
+    return { error: NextResponse.json({ error: "Forbidden — Reviewers cannot manage integrations" }, { status: 403 }) };
   }
   return { me };
 }
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (!provider || !secret) {
     return NextResponse.json({ error: "provider and secret are required" }, { status: 400 });
   }
-  if (!["JIRA", "ASANA", "TRELLO", "SLACK"].includes(provider)) {
+  if (!["GROQ", "JIRA", "ASANA", "TRELLO", "SLACK"].includes(provider)) {
     return NextResponse.json({ error: "Unsupported provider" }, { status: 400 });
   }
 

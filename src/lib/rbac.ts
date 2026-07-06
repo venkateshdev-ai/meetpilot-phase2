@@ -1,54 +1,63 @@
 // Central permission table. Every server action / route handler should call can(...)
 // rather than checking role strings inline — this is what makes RBAC auditable and
 // makes adding a new role or permission a one-file change instead of a grep-and-pray.
+//
+// Three-tier model (phase-2 pivot):
+//   GLOBAL_ADMIN — everything, including managing other admins
+//   ADMIN        — day-to-day admin: manage users, integrations, billing view
+//   REVIEWER     — participates in meetings, but cannot create/add/edit users
 
-export type Role = "ORG_ADMIN" | "TEAM_LEAD" | "MEMBER" | "GUEST";
+export type Role = "GLOBAL_ADMIN" | "ADMIN" | "REVIEWER";
 
 export type Permission =
   | "meeting:create"
   | "meeting:view_transcript"
   | "meeting:delete"
-  | "room:manage_inventory"
-  | "room:book"
   | "integration:manage"
   | "actionitem:push_to_tool"
   | "org:manage_members"
+  | "org:manage_admins"
   | "org:view_audit_log"
   | "analytics:view_org_wide"
-  | "desk:book"
-  | "visitor:manage"
   | "billing:view"
   | "billing:manage";
 
 const PERMISSIONS: Record<Role, Permission[]> = {
-  ORG_ADMIN: [
+  GLOBAL_ADMIN: [
     "meeting:create",
     "meeting:view_transcript",
     "meeting:delete",
-    "room:manage_inventory",
-    "room:book",
+    "integration:manage",
+    "actionitem:push_to_tool",
+    "org:manage_members",
+    "org:manage_admins",
+    "org:view_audit_log",
+    "analytics:view_org_wide",
+    "billing:view",
+    "billing:manage",
+  ],
+  ADMIN: [
+    "meeting:create",
+    "meeting:view_transcript",
     "integration:manage",
     "actionitem:push_to_tool",
     "org:manage_members",
     "org:view_audit_log",
     "analytics:view_org_wide",
-    "desk:book",
-    "visitor:manage",
     "billing:view",
-    "billing:manage",
   ],
-  TEAM_LEAD: [
+  REVIEWER: [
     "meeting:create",
     "meeting:view_transcript",
-    "room:book",
     "actionitem:push_to_tool",
     "analytics:view_org_wide",
-    "desk:book",
-    "visitor:manage",
-    "billing:view",
   ],
-  MEMBER: ["meeting:create", "room:book", "actionitem:push_to_tool", "desk:book"],
-  GUEST: ["room:book"],
+};
+
+export const ROLE_LABELS: Record<Role, string> = {
+  GLOBAL_ADMIN: "Global Admin",
+  ADMIN: "Admin",
+  REVIEWER: "Reviewer",
 };
 
 export function can(role: Role, permission: Permission): boolean {

@@ -11,11 +11,9 @@ export interface AnalyticsData {
     statusCounts: Record<string, number>;
     topics: { topic: string; weight: number }[];
   };
-  rooms: { room: string; bookedHoursThisWeek: number; capacity: number }[];
-  deskFloors: { floor: string; total: number; booked: number }[];
 }
 
-export default function AnalyticsView({ stats, rooms, deskFloors }: AnalyticsData) {
+export default function AnalyticsView({ stats }: AnalyticsData) {
   const statusData = Object.entries(stats.statusCounts).map(([status, count]) => ({ status, count }));
 
   return (
@@ -67,34 +65,7 @@ export default function AnalyticsView({ stats, rooms, deskFloors }: AnalyticsDat
             </BarChart>
           </ResponsiveContainer>
         </Card>
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold">Room utilization (hrs booked this week)</h4>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={rooms} layout="vertical">
-              <XAxis type="number" stroke="#64748b" fontSize={11} />
-              <YAxis type="category" dataKey="room" stroke="#64748b" fontSize={11} width={90} />
-              <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-              <Bar dataKey="bookedHoursThisWeek" fill="#22c55e" radius={4} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold">Desk utilization by floor (today)</h4>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={deskFloors}>
-              <XAxis dataKey="floor" stroke="#64748b" fontSize={11} />
-              <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-              <Bar dataKey="total" fill="#1a2138" radius={4} name="Total desks" />
-              <Bar dataKey="booked" fill="#f59e0b" radius={4} name="Booked" />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
       </div>
-      <p className="mt-4 text-xs text-slate-500">
-        Room/desk utilization panels still use seeded mock numbers (Stage 8 booking suite hasn't gone real yet) —
-        the four stats above and the two upper charts are live queries against the real database.
-      </p>
     </div>
   );
 }

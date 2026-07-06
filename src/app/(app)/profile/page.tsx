@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { Card, Badge, Avatar, TextField, Button } from "@/components/ui";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listActionItemsForUser, getMeeting, listMembershipsByRole } from "@/lib/db/store";
+import { Role, ROLE_LABELS } from "@/lib/rbac";
 
 function colorFor(id: string) {
   const AVATAR_COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#6d5bf8", "#2e5aac", "#94a3b8"];
@@ -27,7 +28,7 @@ export default async function ProfilePage() {
     listActionItemsForUser(user.id),
     listMembershipsByRole(),
   ]);
-  const role = roleByUser[user.id] ?? "MEMBER";
+  const role = (roleByUser[user.id] ?? "REVIEWER") as Role;
   const meetingsById = Object.fromEntries(
     await Promise.all(
       Array.from(new Set(myActions.map((a) => a.meetingId))).map(async (id) => [id, await getMeeting(id)] as const)
@@ -43,7 +44,7 @@ export default async function ProfilePage() {
         <div>
           <div className="text-lg font-semibold">{user.name}</div>
           <div className="text-sm text-slate-400">{user.email}</div>
-          <Badge tone="accent">{role.replace("_", " ")}</Badge>
+          <Badge tone="accent">{ROLE_LABELS[role] ?? role}</Badge>
         </div>
       </Card>
 

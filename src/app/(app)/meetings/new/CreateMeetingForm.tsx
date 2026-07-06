@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Video, DoorOpen, Layers, Star } from "lucide-react";
+import { Video, DoorOpen, Layers } from "lucide-react";
 import { Card, Button, TextField, Avatar, Badge } from "@/components/ui";
-import type { DbRoom, DbUser } from "@/lib/db/store";
+import type { DbUser } from "@/lib/db/store";
 
 type MeetingKind = "ONLINE" | "OFFLINE" | "HYBRID";
 
@@ -15,7 +15,7 @@ function colorFor(id: string) {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; rooms: DbRoom[] }) {
+export default function CreateMeetingForm({ users }: { users: DbUser[] }) {
   const router = useRouter();
   const [kind, setKind] = useState<MeetingKind>("ONLINE");
   const [title, setTitle] = useState("Product Roadmap Review");
@@ -25,7 +25,7 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
     users.slice(0, 2).map((u) => u.id)
   );
-  const [selectedRoom, setSelectedRoom] = useState<string | null>(rooms[0]?.id ?? null);
+  const [importPrevActionItems, setImportPrevActionItems] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +47,7 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
           startTime: new Date(start).toISOString(),
           endTime: new Date(end).toISOString(),
           participantIds: selectedParticipants,
-          roomId: kind !== "ONLINE" ? selectedRoom : null,
+          importPrevActionItems,
         }),
       });
       if (!res.ok) {
@@ -73,7 +73,7 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
         {(
           [
             { key: "ONLINE", label: "Online", icon: Video },
-            { key: "OFFLINE", label: "Offline (Room)", icon: DoorOpen },
+            { key: "OFFLINE", label: "Offline (In-person)", icon: DoorOpen },
             { key: "HYBRID", label: "Hybrid", icon: Layers },
           ] as const
         ).map((opt) => (
@@ -107,7 +107,7 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
         </label>
 
         <span className="mb-2 block text-sm text-slate-300">Participants</span>
-        <div className="mb-2 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           {users.map((u) => (
             <button
               key={u.id}
@@ -123,6 +123,30 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
             </button>
           ))}
         </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-base-700 bg-base-900 px-3.5 py-2.5">
+          <div>
+            <div className="text-sm text-slate-300">Import action items from previous meet</div>
+            <div className="text-xs text-slate-500">
+              Carries open action items from this group's last meeting into the new one for follow-up.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={importPrevActionItems}
+            onClick={() => setImportPrevActionItems((v) => !v)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              importPrevActionItems ? "bg-accent-500" : "bg-base-700"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                importPrevActionItems ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
       </Card>
 
       {(kind === "ONLINE" || kind === "HYBRID") && (
@@ -132,44 +156,12 @@ export default function CreateMeetingForm({ users, rooms }: { users: DbUser[]; r
               <Video size={18} />
             </span>
             <div>
-              <div className="text-sm font-medium">Google Meet link</div>
-              <div className="text-xs text-slate-500">Auto-generated when you send the invite</div>
+              <div className="text-sm font-medium">Video call link</div>
+              <div className="text-xs text-slate-500">A live video room is created automatically when you send the invite</div>
             </div>
           </div>
           <Badge tone="accent">Auto-generated</Badge>
         </Card>
-      )}
-
-      {(kind === "OFFLINE" || kind === "HYBRID") && (
-        <div className="mb-6">
-          <span className="mb-2 block text-sm text-slate-300">Choose a room</span>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {rooms.map((r) => (
-              <Card
-                key={r.id}
-                onClick={() => setSelectedRoom(r.id)}
-                className={`cursor-pointer transition ${selectedRoom === r.id ? "border-accent-500" : ""}`}
-              >
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="font-medium">{r.name}</span>
-                  <span className="flex items-center gap-1 text-xs text-warning">
-                    <Star size={12} fill="currentColor" /> 4.5
-                  </span>
-                </div>
-                <div className="text-xs text-slate-400">
-                  {r.capacity} seats · {r.areaSqft} sqft · ₹{r.tariffPerHour}/hr
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {r.amenities.map((a) => (
-                    <span key={a} className="rounded-full bg-base-700 px-2 py-0.5 text-[10px] text-slate-300">
-                      {a}
-                    </span>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
       )}
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}

@@ -2,16 +2,18 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, createMeetingUpload, updateMeetingUpload, saveAiGeneratedSummary, createActionItemsFromAi } from "@/lib/db/store";
-import { extractText, SUPPORTED_EXTENSIONS } from "@/lib/ai/extractText";
+import { extractText, isAudioVideoFile, SUPPORTED_EXTENSIONS } from "@/lib/ai/extractText";
 import { summarizeMeetingText } from "@/lib/ai/summarize";
+import { transcribeAudio } from "@/lib/ai/groq";
 
 export const runtime = "nodejs"; // needed for Buffer + pdf-parse/mammoth (not Edge-safe)
 
-// Upload a transcript/notes file for a meeting -> extract text -> Groq LLM
-// summary + action items -> write real MeetingSummary + ActionItem rows.
-// This is the "upload a file, get a summary + action items" flow requested
-// as an alternative to live audio transcription (which needs a separate
-// Whisper/AssemblyAI/Deepgram integration this build doesn't have).
+const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_AV_FILE_BYTES = 25 * 1024 * 1024; // Groq Whisper's free-tier request limit
+
+// Upload a meeting recording (audio/video) or a transcript/notes file ->
+// extract text (transcribing AV via Groq Whisper first) -> Groq LLM summary
+// + action items -> write real MeetingSummary + ActionItem rows.
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -33,8 +35,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       { status: 400 }
     );
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "File too large (max 10MB)" }, { status: 400 });
+  const isAv = isAudioVideoFile(file.name);
+  const maxBytes = isAv ? MAX_AV_FILE_BYTES : MAX_TEXT_FILE_BYTES;
+  if (file.size > maxBytes) {
+    return NextResponse.json({ error: `File too large (max ${maxBytes / (1024 * 1024)}MB)` }, { status: 400 });
   }
 
   const upload = await createMeetingUpload({
@@ -49,7 +53,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await updateMeetingUpload(upload.id, { status: "PROCESSING" });
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const text = await extractText(buffer, file.type, file.name);
+
+    let text: string;
+    if (isAv) {
+      const transcription = await transcribeAudio(buffer, file.name, file.type || "application/octet-stream");
+      if (!transcription.ok) {
+        await updateMeetingUpload(upload.id, { status: "FAILED", errorMessage: transcription.error });
+        return NextResponse.json({ error: transcription.error ?? "Transcription failed" }, { status: 502 });
+      }
+      text = transcription.text ?? "";
+    } else {
+      text = await extractText(buffer, file.type, file.name);
+    }
 
     if (!text.trim()) {
       await updateMeetingUpload(upload.id, { status: "FAILED", errorMessage: "No extractable text in file" });

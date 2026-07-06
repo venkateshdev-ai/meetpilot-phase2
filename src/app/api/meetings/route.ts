@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { createMeeting } from "@/lib/db/store";
+import { createMeeting, createInstantMeeting, importOpenActionItemsFromPrevious } from "@/lib/db/store";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -11,7 +11,15 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  const { title, type, agenda, startTime, endTime, participantIds, roomId } = body ?? {};
+
+  // Google Meet / Zoom style "start an instant meeting" — no form fields,
+  // meeting starts now and the creator lands straight in the call.
+  if (body?.instant) {
+    const meeting = await createInstantMeeting(userId);
+    return NextResponse.json(meeting, { status: 201 });
+  }
+
+  const { title, type, agenda, startTime, endTime, participantIds, importPrevActionItems } = body ?? {};
   if (!title || !type || !startTime || !endTime) {
     return NextResponse.json({ error: "title, type, startTime, endTime are required" }, { status: 400 });
   }
@@ -24,8 +32,13 @@ export async function POST(req: Request) {
     endTime,
     createdById: userId,
     participantIds: participantIds ?? [],
-    roomId: roomId ?? null,
   });
+
+  // FRD: "Action item import from previous meet" toggle — carry the previous
+  // meeting's open action items into this one for follow-up.
+  if (importPrevActionItems) {
+    await importOpenActionItemsFromPrevious(meeting);
+  }
 
   return NextResponse.json(meeting, { status: 201 });
 }

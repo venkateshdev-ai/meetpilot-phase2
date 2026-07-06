@@ -3,11 +3,9 @@
 // shape as its counterpart in src/lib/mock/store.ts on purpose — swapping a
 // page from mock to real was meant to be a one-line import change, and it is.
 //
-// Desks / visitors / billing / admin integration tiles / video / Slack
-// slash-command remain on the mock layer for now — per product sequencing,
-// MeetPilot's own core (auth -> create meeting -> meeting hub -> action items
-// -> analytics) goes real first, before the surrounding workspace-booking
-// suite (Stage 8) gets the same treatment.
+// Billing invoices remain on the mock layer for now (Stripe integration is a
+// follow-up); everything else in the core loop (auth -> create meeting ->
+// meeting hub -> action items -> chat -> analytics) is real.
 import { pgSelect, pgInsert, pgUpdate, genId } from "./supabase";
 import bcrypt from "bcryptjs";
 
@@ -23,17 +21,7 @@ export interface DbUser {
 export interface DbMembership {
   userId: string;
   orgId: string;
-  role: "ORG_ADMIN" | "TEAM_LEAD" | "MEMBER" | "GUEST";
-}
-export interface DbRoom {
-  id: string;
-  name: string;
-  capacity: number;
-  areaSqft: number | null;
-  floor: string | null;
-  zone: string | null;
-  amenities: string[];
-  tariffPerHour: string | null;
+  role: "GLOBAL_ADMIN" | "ADMIN" | "REVIEWER";
 }
 export interface DbMeeting {
   id: string;
@@ -95,7 +83,7 @@ export async function createUserWithOrg(input: {
     id: genId("m"),
     orgId: ORG_ID,
     userId,
-    role: "MEMBER",
+    role: "REVIEWER",
   });
   return user;
 }
@@ -117,8 +105,8 @@ export async function listMembershipsByRole(): Promise<Record<string, DbMembersh
   return Object.fromEntries(memberships.map((m) => [m.userId, m.role]));
 }
 
-// Real "Add member" flow for the Admin console, distinct from self-signup:
-// an ORG_ADMIN adds someone by email + role, we generate a temp password
+// Real "Add user" flow for User management, distinct from self-signup:
+// an Admin adds someone by email + role, we generate a temp password
 // (no invite-link/passwordless flow yet — that needs a token table + expiry,
 // left as a follow-up), create the User + OrgMembership rows, and return the
 // temp password so the caller can email it via src/lib/email.
@@ -173,16 +161,11 @@ export async function logEmail(input: { toEmail: string; type: string; status: "
 }
 
 // ---------------------------------------------------------------------------
-// Rooms
-// ---------------------------------------------------------------------------
-
-export async function listRooms(): Promise<DbRoom[]> {
-  return pgSelect<DbRoom>("Room", { orgId: `eq.${ORG_ID}`, isActive: "eq.true" });
-}
-
-// ---------------------------------------------------------------------------
 // Meetings
 // ---------------------------------------------------------------------------
+// Room booking (physical room inventory + reservations) is deferred to
+// phase 2 — meetings are online-first (see Jitsi Meet link generation
+// below), with OFFLINE/HYBRID left as descriptive-only meeting types for now.
 
 export async function listMeetings(): Promise<DbMeeting[]> {
   return pgSelect<DbMeeting>("Meeting", { orgId: `eq.${ORG_ID}`, order: "startTime.desc" });
@@ -227,6 +210,20 @@ export async function listTranscriptForMeeting(meetingId: string) {
   return pgSelect<any>("TranscriptSegment", { meetingId: `eq.${meetingId}`, order: "tMinutes.asc" });
 }
 
+// Public Jitsi Meet instance that allows fully anonymous rooms AND iframe
+// embedding. meet.jit.si (the flagship server) now requires the first
+// participant to sign in with Google/GitHub as an anti-abuse measure, and
+// most community servers (e.g. meet.ffmuc.net) block third-party embedding
+// via frame-ancestors — jitsi.riot.im is Element's instance, built to be
+// embedded in Matrix clients, so it allows both. Self-hosting Jitsi (or
+// Jitsi-as-a-Service) removes the third-party dependency for production.
+// Override via JITSI_BASE_URL.
+const JITSI_BASE = process.env.JITSI_BASE_URL || "https://jitsi.riot.im";
+
+export function meetingVideoLink(meetingId: string): string {
+  return `${JITSI_BASE}/MeetPilot-${meetingId}`;
+}
+
 export async function createMeeting(input: {
   title: string;
   type: "ONLINE" | "OFFLINE" | "HYBRID";
@@ -235,11 +232,13 @@ export async function createMeeting(input: {
   endTime: string;
   createdById: string;
   participantIds: string[];
-  roomId?: string | null;
 }): Promise<DbMeeting> {
   const id = genId("mtg");
   const participantSetHash = [...input.participantIds].sort().join("_");
 
+  // Real, joinable video room (no signup/API key needed) — the room name is
+  // derived from the meeting id so it's stable and re-joinable, not
+  // regenerated on every page load.
   const [meeting] = await pgInsert<DbMeeting>("Meeting", {
     id,
     orgId: ORG_ID,
@@ -247,7 +246,7 @@ export async function createMeeting(input: {
     type: input.type,
     status: "SCHEDULED",
     agenda: input.agenda,
-    meetLink: input.type !== "OFFLINE" ? `https://meet.google.com/${genId("mtp").slice(0, 11)}` : null,
+    meetLink: input.type !== "OFFLINE" ? meetingVideoLink(id) : null,
     callProvider: "MeetPilot Video",
     startTime: input.startTime,
     endTime: input.endTime,
@@ -262,19 +261,90 @@ export async function createMeeting(input: {
     );
   }
 
-  if (input.roomId && (input.type === "OFFLINE" || input.type === "HYBRID")) {
-    await pgInsert("RoomBooking", {
-      id: genId("rb"),
-      roomId: input.roomId,
-      meetingId: id,
-      createdById: input.createdById,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      status: "BOOKED",
+  return meeting;
+}
+
+// "Start an instant meeting" (Google Meet / Zoom style): no scheduling form —
+// a meeting that starts now, marked IN_PROGRESS, with the creator as the only
+// participant; others join via the meeting link.
+export async function createInstantMeeting(createdById: string): Promise<DbMeeting> {
+  const now = new Date();
+  const end = new Date(now.getTime() + 60 * 60 * 1000);
+  const id = genId("mtg");
+
+  const [meeting] = await pgInsert<DbMeeting>("Meeting", {
+    id,
+    orgId: ORG_ID,
+    title: `Instant meeting — ${now.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
+    type: "ONLINE",
+    status: "IN_PROGRESS",
+    agenda: "",
+    meetLink: meetingVideoLink(id),
+    callProvider: "MeetPilot Video",
+    startTime: now.toISOString(),
+    endTime: end.toISOString(),
+    createdById,
+    participantSetHash: createdById,
+  });
+
+  await pgInsert("MeetingParticipant", { id: genId("mp"), meetingId: id, userId: createdById });
+  return meeting;
+}
+
+// FRD "Action item import from previous meet": copy the previous meeting's
+// still-open action items into the new meeting so the group can review and
+// update their status in the follow-up (the originals stay untouched on the
+// old meeting — this is a carry-forward snapshot, not a move).
+export async function importOpenActionItemsFromPrevious(meeting: DbMeeting): Promise<number> {
+  const previous = await findPreviousMeetingForGroup(meeting);
+  if (!previous) return 0;
+
+  const prevItems = await pgSelect<DbActionItem>("ActionItem", {
+    meetingId: `eq.${previous.id}`,
+    status: `neq.DONE`,
+  });
+  if (prevItems.length === 0) return 0;
+
+  await pgInsert(
+    "ActionItem",
+    prevItems.map((item) => ({
+      id: genId("ai"),
+      meetingId: meeting.id,
+      description: item.description,
+      assigneeId: item.assigneeId,
+      dueDate: item.dueDate,
+      status: item.status,
+    }))
+  );
+  return prevItems.length;
+}
+
+export async function updateActionItemStatus(id: string, status: DbActionItem["status"]): Promise<DbActionItem> {
+  const [row] = await pgUpdate<DbActionItem>("ActionItem", { id: `eq.${id}` }, { status });
+  return row;
+}
+
+// Saves the MoM side-panel edits (FRD "MoM Window side" wireframe): agenda
+// lives on the Meeting row, discussed items go into MeetingSummary.keyDecisions
+// (same field the AI summarizer writes, so both flows land in one place).
+export async function saveMeetingNotes(
+  meetingId: string,
+  notes: { agenda: string; discussedItems: string[] }
+) {
+  await pgUpdate("Meeting", { id: `eq.${meetingId}` }, { agenda: notes.agenda });
+  const existing = await getMeetingSummary(meetingId);
+  if (existing) {
+    await pgUpdate("MeetingSummary", { meetingId: `eq.${meetingId}` }, { keyDecisions: notes.discussedItems });
+  } else {
+    await pgInsert("MeetingSummary", {
+      id: genId("sum"),
+      meetingId,
+      executiveSummary: "",
+      keyDecisions: notes.discussedItems,
+      topicsJson: [],
+      consentGiven: true,
     });
   }
-
-  return meeting;
 }
 
 // ---------------------------------------------------------------------------
@@ -539,6 +609,38 @@ export async function getTicketById(id: string): Promise<DbTicket | undefined> {
 
 export async function updateTicket(id: string, patch: Partial<DbTicket>): Promise<DbTicket> {
   const [row] = await pgUpdate<DbTicket>("Ticket", { id: `eq.${id}` }, patch);
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Team chat (Slack-style side panel)
+// ---------------------------------------------------------------------------
+
+export interface DbChatMessage {
+  id: string;
+  orgId: string;
+  userId: string;
+  text: string;
+  createdAt: string;
+}
+
+export async function listChatMessages(limit = 50): Promise<DbChatMessage[]> {
+  // Fetch the newest N, then reverse so the UI renders oldest-first.
+  const rows = await pgSelect<DbChatMessage>("ChatMessage", {
+    orgId: `eq.${ORG_ID}`,
+    order: "createdAt.desc",
+    limit: String(limit),
+  });
+  return rows.reverse();
+}
+
+export async function postChatMessage(userId: string, text: string): Promise<DbChatMessage> {
+  const [row] = await pgInsert<DbChatMessage>("ChatMessage", {
+    id: genId("msg"),
+    orgId: ORG_ID,
+    userId,
+    text,
+  });
   return row;
 }
 

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listRooms, listDesks } from "@/lib/mock/store";
+import { getUpcomingMeetings } from "@/lib/db/store";
 
-// Scaffold for a Slack slash command, e.g. "/meetpilot book tagor 3pm".
+// Scaffold for a Slack slash command, e.g. "/meetpilot meetings".
 // This closes the PRD gap-analysis item "Slack/Teams bot — highest-leverage
-// adoption lever" by giving MeetPilot a chat-native booking entry point
-// instead of requiring people to open the web app.
+// adoption lever" by giving MeetPilot a chat-native entry point.
 //
 // TO GO TO PRODUCTION, this route still needs:
 // 1. Signature verification — Slack signs every request with an
@@ -15,47 +14,27 @@ import { listRooms, listDesks } from "@/lib/mock/store";
 // 2. A real Slack App registered at api.slack.com/apps with the
 //    `/meetpilot` slash command configured to POST here, and OAuth scopes
 //    for posting confirmation messages back to the channel.
-// 3. Replacing the mock command parser below with real create/lookup calls
-//    against prisma.room / prisma.desk / prisma.roomBooking.
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const text = (form.get("text") as string) ?? "";
-  const userName = (form.get("user_name") as string) ?? "someone";
 
-  const [action, ...rest] = text.trim().split(/\s+/);
-  const query = rest.join(" ").toLowerCase();
+  const [action] = text.trim().split(/\s+/);
 
-  if (action === "book") {
-    const rooms = listRooms();
-    const desks = listDesks();
-    const match =
-      rooms.find((r) => query.includes(r.name.split(" ")[0].toLowerCase())) ??
-      desks.find((d) => query.includes(d.label.toLowerCase()));
-
-    if (!match) {
-      return NextResponse.json({
-        response_type: "ephemeral",
-        text: `Couldn't find a room or desk matching "${query}". Try \`/meetpilot rooms\` to see what's available.`,
-      });
+  if (action === "meetings") {
+    const upcoming = await getUpcomingMeetings();
+    if (upcoming.length === 0) {
+      return NextResponse.json({ response_type: "ephemeral", text: "No upcoming meetings." });
     }
-
-    const label = "name" in match ? match.name : match.label;
-    return NextResponse.json({
-      response_type: "in_channel",
-      text: `✅ ${userName} booked *${label}* via MeetPilot. (Demo response — production wires this to a real RoomBooking/DeskBooking write and a wayfinding note.)`,
-    });
-  }
-
-  if (action === "rooms") {
-    const rooms = listRooms();
     return NextResponse.json({
       response_type: "ephemeral",
-      text: `Available rooms: ${rooms.map((r) => r.name).join(", ")}`,
+      text: `Upcoming meetings:\n${upcoming
+        .map((m) => `• *${m.title}* — ${new Date(m.startTime).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`)
+        .join("\n")}`,
     });
   }
 
   return NextResponse.json({
     response_type: "ephemeral",
-    text: "Try `/meetpilot book <room or desk name>` or `/meetpilot rooms`.",
+    text: "Try `/meetpilot meetings` to see what's coming up.",
   });
 }

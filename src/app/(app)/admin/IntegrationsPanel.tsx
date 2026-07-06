@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { Card, Badge, Button, TextField } from "@/components/ui";
 
-type Provider = "JIRA" | "ASANA" | "TRELLO" | "SLACK";
+type Provider = "GROQ" | "JIRA" | "ASANA" | "TRELLO" | "SLACK";
 
+// The AI tile (stored under the GROQ provider key for backward compat) works
+// with ANY OpenAI-compatible endpoint: Groq, OpenAI, Ollama, LM Studio,
+// vLLM, Together, etc. — just point baseUrl at it.
 const PROVIDER_FIELDS: Record<Provider, { key: string; label: string; placeholder: string }[]> = {
+  GROQ: [
+    { key: "baseUrl", label: "Base URL (OpenAI-compatible)", placeholder: "https://api.groq.com/openai/v1" },
+    { key: "model", label: "Model", placeholder: "llama-3.3-70b-versatile" },
+  ],
   JIRA: [
     { key: "siteUrl", label: "Site URL", placeholder: "yourcompany.atlassian.net" },
     { key: "userEmail", label: "Account email", placeholder: "you@company.com" },
@@ -20,10 +27,19 @@ const PROVIDER_FIELDS: Record<Provider, { key: string; label: string; placeholde
 };
 
 const SECRET_LABEL: Record<Provider, string> = {
+  GROQ: "API key (for local LLMs like Ollama, type anything, e.g. \"ollama\")",
   JIRA: "API token",
   ASANA: "Personal access token",
   TRELLO: "key:token (colon-separated)",
   SLACK: "Bot token (xoxb-...)",
+};
+
+const PROVIDER_LABEL: Record<Provider, string> = {
+  GROQ: "AI / LLM (Groq, OpenAI, Ollama…)",
+  JIRA: "Jira",
+  ASANA: "Asana",
+  TRELLO: "Trello",
+  SLACK: "Slack",
 };
 
 interface IntegrationStatus {
@@ -46,8 +62,8 @@ export default function IntegrationsPanel() {
 
   useEffect(() => {
     fetch("/api/org/integrations")
-      .then((r) => r.json())
-      .then((rows: IntegrationStatus[]) => {
+      .then(async (r) => (r.ok ? ((await r.json()) as IntegrationStatus[]) : []))
+      .then((rows) => {
         const byProvider = Object.fromEntries(rows.map((r) => [r.provider, r])) as Record<
           Provider,
           IntegrationStatus | undefined
@@ -82,7 +98,7 @@ export default function IntegrationsPanel() {
     setSaving(false);
   }
 
-  const providers: Provider[] = ["JIRA", "ASANA", "TRELLO", "SLACK"];
+  const providers: Provider[] = ["GROQ", "JIRA", "ASANA", "TRELLO", "SLACK"];
 
   return (
     <Card className="divide-y divide-base-700 p-0">
@@ -92,10 +108,7 @@ export default function IntegrationsPanel() {
           <div key={provider} className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium">
-                  {provider[0]}
-                  {provider.slice(1).toLowerCase()}
-                </div>
+                <div className="text-sm font-medium">{PROVIDER_LABEL[provider]}</div>
                 <div className="text-xs text-slate-500">
                   {status?.connected ? "Connected" : "Not connected"}
                 </div>

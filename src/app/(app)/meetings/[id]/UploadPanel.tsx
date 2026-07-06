@@ -43,13 +43,15 @@ export default function UploadPanel({ meetingId }: { meetingId: string }) {
       <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-base-700 p-8 text-center">
         <UploadCloud size={28} className="text-slate-500" />
         <div>
-          <p className="text-sm font-medium">Upload a transcript or notes file</p>
-          <p className="mt-1 text-xs text-slate-500">.txt, .md, .docx, or .pdf — max 10MB</p>
+          <p className="text-sm font-medium">Upload a recording, transcript, or notes file</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Audio/video (.mp3, .wav, .m4a, .mp4, .webm — max 25MB) or text (.txt, .md, .docx, .pdf — max 10MB)
+          </p>
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept=".txt,.md,.docx,.pdf"
+          accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.mp4,.webm,.mpeg,.mpga,.ogg,.flac"
           className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
@@ -64,9 +66,9 @@ export default function UploadPanel({ meetingId }: { meetingId: string }) {
         <p className={`mt-3 text-xs ${result.ok ? "text-emerald-400" : "text-danger"}`}>{result.message}</p>
       )}
       <p className="mt-3 text-xs text-slate-500">
-        This runs the file through an LLM (Groq, free tier) to produce the executive summary, key decisions,
-        topics, and action items you'll see in the Summary / Action Items / Analysis tabs. Requires GROQ_API_KEY
-        in .env — without it, upload will fail with a clear error instead of silently mocking a result.
+        Audio/video is transcribed first (Groq Whisper), then the text runs through an LLM (Groq) to produce the
+        executive summary, key decisions, topics, and action items you'll see in the Summary / Action Items /
+        Analysis tabs. Needs a Groq API key — add yours in Admin &gt; Settings, or set GROQ_API_KEY in .env.
       </p>
     </Card>
   );

@@ -6,11 +6,11 @@ import { sendEmail } from "@/lib/email/resend";
 import { inviteMemberEmail } from "@/lib/email/templates";
 import { can, Role } from "@/lib/rbac";
 
-// Admin "Add member" action — creates a real User with a different email
-// than the person doing the inviting, then emails them a temp password.
-// This is deliberately separate from /api/auth/register (self-signup): only
-// an ORG_ADMIN can call this, and it can add someone who never visits the
-// signup page themselves.
+// "Add user" action — creates a real User with a different email than the
+// person doing the inviting, then emails them a temp password. This is
+// deliberately separate from /api/auth/register (self-signup): only an
+// Admin/Global Admin can call this (Reviewers cannot), and it can add
+// someone who never visits the signup page themselves.
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -21,13 +21,19 @@ export async function POST(req: Request) {
   const roleByUser = me ? await listMembershipsByRole() : {};
   const myRole = (me && roleByUser[me.id]) as Role | undefined;
   if (!myRole || !can(myRole, "org:manage_members")) {
-    return NextResponse.json({ error: "Forbidden — only Org Admins can add members" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden — Reviewers cannot add users" }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
   const { name, email, role } = body ?? {};
   if (!name || !email || !role) {
     return NextResponse.json({ error: "name, email, and role are required" }, { status: 400 });
+  }
+  if (!["GLOBAL_ADMIN", "ADMIN", "REVIEWER"].includes(role)) {
+    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
+  if (role === "GLOBAL_ADMIN" && !can(myRole, "org:manage_admins")) {
+    return NextResponse.json({ error: "Forbidden — only a Global Admin can create Global Admins" }, { status: 403 });
   }
 
   let created;

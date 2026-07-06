@@ -17,12 +17,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ORG_ADMIN
-  TEAM_LEAD
-  MEMBER
-  GUEST
-}
+// Roles are plain strings owned by src/lib/rbac.ts (GLOBAL_ADMIN / ADMIN /
+// REVIEWER) — the DB enum was dropped so the app can evolve the role set
+// without a schema migration each time.
 
 enum MeetingType {
   ONLINE
@@ -55,6 +52,7 @@ enum IntegrationProvider {
   SALESFORCE
   HUBSPOT
   STRIPE
+  GROQ
 }
 
 enum TicketStatus {
@@ -134,8 +132,22 @@ model User {
   uploadedFiles       MeetingUpload[]  @relation("UploadedBy")
   createdTickets      Ticket[]         @relation("TicketCreatedBy")
   assignedTickets     Ticket[]         @relation("TicketAssignee")
+  chatMessages        ChatMessage[]
 
   @@index([email])
+}
+
+// Slack-style team chat (side panel in the app shell)
+model ChatMessage {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }
 
 // A user's membership + role within one org. This is the enterprise-correct place for RBAC.
@@ -143,7 +155,7 @@ model OrgMembership {
   id        String   @id @default(cuid())
   orgId     String
   userId    String
-  role      Role     @default(MEMBER)
+  role      String   @default("REVIEWER")
   createdAt DateTime @default(now())
 
   org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -157,7 +169,7 @@ model InviteCode {
   id        String   @id @default(cuid())
   orgId     String
   code      String   @unique
-  role      Role     @default(MEMBER)
+  role      String   @default("REVIEWER")
   expiresAt DateTime?
   usesLeft  Int?
   createdAt DateTime @default(now())

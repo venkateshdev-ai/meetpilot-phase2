@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { Video, DoorOpen, Layers } from "lucide-react";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
+import InstantMeetingButton from "@/components/InstantMeetingButton";
+import { Role, ROLE_LABELS } from "@/lib/rbac";
 import { authOptions } from "@/lib/auth";
 import {
   getUpcomingMeetings, listUsers, listMeetings, getMeetingParticipantIds, listMembershipsByRole,
@@ -43,9 +45,12 @@ export default async function DashboardPage() {
             <h1 className="text-2xl font-bold">Good afternoon, {firstName}</h1>
             <p className="text-sm text-slate-400">Here's what's happening across Acme Industries.</p>
           </div>
-          <Link href="/meetings/new">
-            <Button>+ Create Meeting</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <InstantMeetingButton />
+            <Link href="/meetings/new">
+              <Button>+ Create Meeting</Button>
+            </Link>
+          </div>
         </div>
 
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -104,18 +109,19 @@ export default async function DashboardPage() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Team status</h2>
         <Card className="flex flex-col gap-4">
           {users.map((u) => {
-            const role = roleByUser[u.id] ?? "MEMBER";
+            const role = (roleByUser[u.id] ?? "REVIEWER") as Role;
+            const label = ROLE_LABELS[role] ?? role;
             return (
               <div key={u.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar name={u.name ?? u.email} color={colorFor(u.id)} size={30} />
                   <div>
                     <div className="text-sm font-medium">{u.name}</div>
-                    <div className="text-xs text-slate-500">{role.replace("_", " ")}</div>
+                    <div className="text-xs text-slate-500">{label}</div>
                   </div>
                 </div>
-                <Badge tone={role === "ORG_ADMIN" ? "accent" : role === "TEAM_LEAD" ? "warning" : "neutral"}>
-                  {role.replace("_", " ")}
+                <Badge tone={role === "GLOBAL_ADMIN" ? "accent" : role === "ADMIN" ? "warning" : "neutral"}>
+                  {label}
                 </Badge>
               </div>
             );
@@ -126,7 +132,7 @@ export default async function DashboardPage() {
           Quick links
         </h2>
         <Card className="flex flex-col gap-2">
-          <Link href="/rooms" className="text-sm text-accent-400 hover:underline">Browse meeting rooms →</Link>
+          <Link href="/meetings/new" className="text-sm text-accent-400 hover:underline">Schedule a meeting →</Link>
           <Link href="/analytics" className="text-sm text-accent-400 hover:underline">View analytics →</Link>
           <Link href="/admin" className="text-sm text-accent-400 hover:underline">Manage members & integrations →</Link>
         </Card>
