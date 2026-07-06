@@ -4,7 +4,7 @@
 //
 // Three-tier model (phase-2 pivot):
 //   GLOBAL_ADMIN — everything, including managing other admins
-//   ADMIN        — day-to-day admin: manage users, integrations, billing view
+//   ADMIN        — day-to-day admin: manage users and integrations
 //   REVIEWER     — participates in meetings, but cannot create/add/edit users
 
 export type Role = "GLOBAL_ADMIN" | "ADMIN" | "REVIEWER";
@@ -18,9 +18,7 @@ export type Permission =
   | "org:manage_members"
   | "org:manage_admins"
   | "org:view_audit_log"
-  | "analytics:view_org_wide"
-  | "billing:view"
-  | "billing:manage";
+  | "analytics:view_org_wide";
 
 const PERMISSIONS: Record<Role, Permission[]> = {
   GLOBAL_ADMIN: [
@@ -33,8 +31,6 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "org:manage_admins",
     "org:view_audit_log",
     "analytics:view_org_wide",
-    "billing:view",
-    "billing:manage",
   ],
   ADMIN: [
     "meeting:create",
@@ -44,7 +40,6 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "org:manage_members",
     "org:view_audit_log",
     "analytics:view_org_wide",
-    "billing:view",
   ],
   REVIEWER: [
     "meeting:create",

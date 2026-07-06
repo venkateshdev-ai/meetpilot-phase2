@@ -1,11 +1,8 @@
-// Real data layer for MeetPilot-core (auth, dashboard, meetings, meeting hub,
-// action items, analytics). Every function here has the exact same name and
-// shape as its counterpart in src/lib/mock/store.ts on purpose — swapping a
-// page from mock to real was meant to be a one-line import change, and it is.
-//
-// Billing invoices remain on the mock layer for now (Stripe integration is a
-// follow-up); everything else in the core loop (auth -> create meeting ->
-// meeting hub -> action items -> chat -> analytics) is real.
+// The app's data layer — every page and API route reads/writes through here.
+// All of it is real (Supabase Postgres over PostgREST, see ./supabase.ts):
+// auth -> create meeting -> meeting hub -> action items -> chat -> analytics.
+// The old mock layer (src/lib/mock/*) was deleted once the last mock-backed
+// pages (rooms/desks/visitors/billing) were cut in the phase-2 pivot.
 import { pgSelect, pgInsert, pgUpdate, genId } from "./supabase";
 import bcrypt from "bcryptjs";
 

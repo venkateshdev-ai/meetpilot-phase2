@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Home, Users, BarChart3, Settings, Search, Receipt, Ticket } from "lucide-react";
+import { Home, Users, BarChart3, Settings, Search, Ticket } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listMembershipsByRole } from "@/lib/db/store";
@@ -19,7 +19,6 @@ const NAV = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/billing", label: "Billing", icon: Receipt },
   { href: "/users", label: "Users", icon: Users },
   { href: "/admin", label: "Settings", icon: Settings },
 ];
