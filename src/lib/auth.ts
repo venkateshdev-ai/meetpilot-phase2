@@ -1,8 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { findUserByEmail, verifyPassword } from "@/lib/db/store";
 
 // NextAuth config. Google SSO ships wired (just needs client id/secret in .env);
 // Microsoft/Azure AD provider follows the same pattern and is a config-only addition
@@ -27,13 +26,10 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
-          include: { memberships: true },
-        });
+        const user = await findUserByEmail(credentials.email);
         if (!user?.passwordHash) return null;
 
-        const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+        const valid = await verifyPassword(user, credentials.password);
         if (!valid) return null;
 
         return {

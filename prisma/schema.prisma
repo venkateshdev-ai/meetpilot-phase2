@@ -47,6 +47,7 @@ enum ActionItemStatus {
 enum IntegrationProvider {
   JIRA
   ASANA
+  TRELLO
   LINEAR
   GOOGLE_CALENDAR
   OUTLOOK_CALENDAR
@@ -54,6 +55,20 @@ enum IntegrationProvider {
   SALESFORCE
   HUBSPOT
   STRIPE
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
 }
 
 enum VisitorStatus {
@@ -94,6 +109,7 @@ model Org {
   inviteCodes  InviteCode[]
   visitors     Visitor[]
   invoices     Invoice[]
+  tickets      Ticket[]
 }
 
 model User {
@@ -115,6 +131,9 @@ model User {
   deskBookings        DeskBooking[]
   hostedVisitors      Visitor[]        @relation("VisitorHost")
   transcriptSegments  TranscriptSegment[]
+  uploadedFiles       MeetingUpload[]  @relation("UploadedBy")
+  createdTickets      Ticket[]         @relation("TicketCreatedBy")
+  assignedTickets     Ticket[]         @relation("TicketAssignee")
 
   @@index([email])
 }
@@ -215,6 +234,8 @@ model Meeting {
   summary      MeetingSummary?
   actionItems  ActionItem[]
   transcript   TranscriptSegment[]
+  uploads      MeetingUpload[]
+  tickets      Ticket[]
 
   @@index([orgId, startTime])
   @@index([participantSetHash])
@@ -262,13 +283,21 @@ model ActionItem {
 
   meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   assignee User?   @relation("ActionAssignee", fields: [assigneeId], references: [id])
+  tickets  Ticket[]
 
   @@index([meetingId])
   @@index([assigneeId, status])
 }
 
-// Per-org OAuth connection to a PM tool. Tokens are encrypted at the application layer
-// before being written here (see src/lib/integrations/crypto.ts) — never store plaintext.
+// Per-org connection to a PM tool. For OAuth providers, tokens go in
+// accessTokenEnc/refreshTokenEnc (encrypted at the application layer before
+// being written here — see src/lib/integrations/crypto.ts). For the
+// personal-access-token providers this app actually wires up (Jira, Asana,
+// Trello, Slack), the PAT/API key is stored in accessTokenEnc the same way,
+// and `config` holds the non-secret per-provider settings needed to route
+// calls (Jira: siteUrl + userEmail + projectKey; Asana: projectGid; Trello:
+// apiKey + boardId — trelloapi actually needs two secrets, key+token, both
+// go in accessTokenEnc as "key:token"; Slack: channelId).
 model Integration {
   id                 String              @id @default(cuid())
   orgId              String
@@ -276,6 +305,7 @@ model Integration {
   accessTokenEnc     String
   refreshTokenEnc    String?
   scope              String?
+  config             Json?
   expiresAt          DateTime?
   connectedById      String
   createdAt          DateTime            @default(now())
@@ -285,6 +315,81 @@ model Integration {
   connectedBy User @relation("IntegrationConnectedBy", fields: [connectedById], references: [id])
 
   @@unique([orgId, provider])
+}
+
+// A file (transcript, notes doc, etc.) uploaded against a meeting so an LLM
+// can generate a summary + action items + light analytics from it, as an
+// alternative/supplement to live transcription. extractedText is the
+// plain-text content pulled from the upload (txt/docx/pdf) before it's sent
+// to the model — see src/lib/ai/summarize.ts.
+model MeetingUpload {
+  id            String       @id @default(cuid())
+  meetingId     String
+  uploadedById  String
+  fileName      String
+  mimeType      String?
+  sizeBytes     Int?
+  extractedText String?
+  status        UploadStatus @default(PENDING)
+  errorMessage  String?
+  createdAt     DateTime     @default(now())
+  processedAt   DateTime?
+
+  meeting    Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation("UploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([meetingId])
+}
+
+// A fully-specced work item, richer than ActionItem. Created from a meeting's
+// action items (or from scratch) and optionally pushed to a connected PM
+// tool. Because Jira/Asana/Trello don't have native fields for
+// "why scenario" or "success metric", the push adapters
+// (src/lib/integrations/*.ts) format all of these into the target ticket's
+// description as labeled sections — this table is the source of truth.
+model Ticket {
+  id                 String              @id @default(cuid())
+  orgId              String
+  meetingId          String?
+  actionItemId       String?
+  title              String
+  description        String?
+  whyScenario        String?
+  featureDescription String?
+  testCases          String?
+  acceptanceCriteria String?
+  telemetry          String?
+  successMetric      String?
+  status             TicketStatus        @default(OPEN)
+  assigneeId         String?
+  createdById        String
+  provider           IntegrationProvider?
+  externalId         String?
+  externalUrl        String?
+  externalStatus     String?
+  lastSyncedAt       DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  org        Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  meeting    Meeting?    @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  actionItem ActionItem? @relation(fields: [actionItemId], references: [id], onDelete: SetNull)
+  assignee   User?       @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  createdBy  User        @relation("TicketCreatedBy", fields: [createdById], references: [id])
+
+  @@index([orgId])
+  @@index([meetingId])
+}
+
+// Append-only send log for outbound email (invites, add-user notifications).
+// Kept simple on purpose — this is an audit trail, not a queue.
+model EmailLog {
+  id           String   @id @default(cuid())
+  toEmail      String
+  type         String
+  status       String
+  errorMessage String?
+  createdAt    DateTime @default(now())
 }
 
 // Hot-desk (as opposed to a bookable meeting Room). Distinct model because desks

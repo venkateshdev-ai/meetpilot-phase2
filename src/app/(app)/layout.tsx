@@ -1,21 +1,43 @@
 import Link from "next/link";
-import { Home, Calendar, Users, BarChart3, Settings, DoorOpen, Search, Armchair, UserCheck, Receipt } from "lucide-react";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { Home, Calendar, Users, BarChart3, Settings, DoorOpen, Search, Armchair, UserCheck, Receipt, Ticket } from "lucide-react";
 import { Avatar } from "@/components/ui";
-import { getCurrentUser } from "@/lib/mock/store";
+import { authOptions } from "@/lib/auth";
+import { findUserByEmail, listMembershipsByRole } from "@/lib/db/store";
+
+function colorFor(id: string) {
+  const AVATAR_COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#6d5bf8", "#2e5aac", "#94a3b8"];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/rooms", label: "Rooms", icon: DoorOpen },
   { href: "/desks", label: "Desks", icon: Armchair },
   { href: "/visitors", label: "Visitors", icon: UserCheck },
+  { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/billing", label: "Billing", icon: Receipt },
   { href: "/admin", label: "Admin", icon: Users },
   { href: "/admin#settings", label: "Settings", icon: Settings },
 ];
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = getCurrentUser();
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+  const email = session?.user?.email;
+  const [dbUser, roleByUser] = await Promise.all([
+    email ? findUserByEmail(email) : Promise.resolve(undefined),
+    listMembershipsByRole(),
+  ]);
+  const user = {
+    name: dbUser?.name ?? session?.user?.name ?? "Guest",
+    id: dbUser?.id ?? "guest",
+    role: dbUser ? roleByUser[dbUser.id] ?? "MEMBER" : "GUEST",
+  };
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-base-700 bg-base-800/40 p-4">
@@ -39,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           href="/profile"
           className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-base-700"
         >
-          <Avatar name={user.name} color={user.avatarColor} size={28} />
+          <Avatar name={user.name} color={colorFor(user.id)} size={28} />
           <div className="text-xs">
             <div className="font-medium text-slate-100">{user.name}</div>
             <div className="text-slate-500">{user.role.replace("_", " ")}</div>
@@ -53,7 +75,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span>Search team...</span>
           </div>
           <Link href="/profile">
-            <Avatar name={user.name} color={user.avatarColor} size={32} />
+            <Avatar name={user.name} color={colorFor(user.id)} size={32} />
           </Link>
         </header>
         <main className="p-6">{children}</main>
