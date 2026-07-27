@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { pushActionItem } from "@/lib/db/store";
+import { requirePermission } from "@/lib/authz";
 
 // Writes a real ActionItem row update (status + synced ticket fields). The
 // ticket ID itself is generated locally, not from a live Jira/Asana/Linear
 // call — see the doc-comment on pushActionItem in src/lib/db/store.ts for why
 // that's still out of scope for this pass.
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  // This route previously had no auth check of any kind — an unauthenticated
+  // caller could push action items into a connected tool.
+  const auth = await requirePermission("actionitem:push_to_tool");
+  if ("response" in auth) return auth.response;
+
   const body = await req.json().catch(() => null);
   const provider = body?.provider as "JIRA" | "ASANA" | "LINEAR" | undefined;
   if (!provider || !["JIRA", "ASANA", "LINEAR"].includes(provider)) {

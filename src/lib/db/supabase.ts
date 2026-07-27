@@ -95,3 +95,15 @@ export async function pgUpdate<T = any>(
 export function genId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
 }
+
+export async function pgDelete(table: string, match: Record<string, string>): Promise<void> {
+  const qs = new URLSearchParams(match);
+  const res = await fetch(`${REST_BASE}/${table}?${qs.toString()}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Supabase REST ${res.status}: ${body}`);
+  }
+}

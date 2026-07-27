@@ -182,11 +182,29 @@ model User {
   triagedTickets      Ticket[]         @relation("TicketTriagedBy")
   ownedSystems        GtmSystem[]      @relation("SystemOwner")
   chatMessages        ChatMessage[]
+  passwordResets      PasswordResetToken[]
 
   @@index([email])
 }
 
 // Slack-style team chat (side panel in the app shell)
+
+// Single-use, expiring token for the password-reset flow. The reset page used
+// to just flip a local boolean and claim an email had been sent; this is the
+// table that makes that claim true.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model ChatMessage {
   id        String   @id @default(cuid())
   orgId     String

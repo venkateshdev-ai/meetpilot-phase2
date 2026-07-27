@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getMeeting, saveMeetingNotes } from "@/lib/db/store";
+import { getMeeting, saveMeetingNotes, deleteMeeting } from "@/lib/db/store";
+import { requirePermission } from "@/lib/authz";
 
 // Saves the MoM side-panel edits (FRD "MoM Window side"): agenda +
 // discussed items. Action items are toggled individually via
@@ -23,4 +24,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   await saveMeetingNotes(params.id, { agenda, discussedItems });
   return NextResponse.json({ ok: true });
+}
+
+// Delete a meeting. meeting:delete was declared in rbac.ts from the start but
+// there was no endpoint behind it, so the permission could never be exercised
+// and a mis-created meeting could not be removed.
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const auth = await requirePermission("meeting:delete");
+  if ("response" in auth) return auth.response;
+
+  try {
+    await deleteMeeting(params.id, auth.caller.user.id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: message.includes("not found") ? 404 : 500 });
+  }
 }

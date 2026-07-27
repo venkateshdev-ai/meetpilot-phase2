@@ -1,100 +1,130 @@
 # MeetPilot
 
-Unified meeting copilot + workspace booking platform. Combines Google Meet-style
-scheduling, Granola-style AI meeting memory, and WeWork/IndiQube-style room
-booking into one product, per the accompanying PRD (`MeetPilot_PRD_Gap_Analysis.docx`).
+**Requests are captured where they're raised — in the meeting — classified,
+triaged against an SLA, and executed only after a human approves, with a full
+audit trail.**
 
-## Changelog
+MeetPilot is a RevOps request-intake tool with a human-in-the-loop AI gate. A
+GTM stakeholder raises something in a meeting ("quotes are calculating tax
+wrong", "the partner portal isn't sending confirmations"); MeetPilot extracts
+it, classifies it, and files it against the revenue system it affects — but it
+does **not** act on it until a named human approves. Every step is recorded.
 
-**v2 (this update)** — added the next tier of features identified in the product
-roadmap discussion, on top of the v1 MVP:
-- **Desk booking** (`/desks`) — hot-desking distinct from meeting-room booking, grouped by floor, for hybrid teams that need a seat rather than a room.
-- **Visitor management** (`/visitors`) — invite external guests, generate a badge code, front-desk check-in, host notification.
-- **Billing** (`/billing`) — invoice list (paid/outstanding/draft totals) and a Stripe "Connect" tile, gated behind the `billing:view` permission.
-- **Calendar, chat, and CRM integration tiles** — Google Calendar, Outlook Calendar, Slack, Salesforce, and HubSpot now appear as connectable OAuth tiles on `/admin`, alongside the existing Jira/Asana/Linear tiles.
-- **Video call + live transcript placeholder** — the Meeting Hub has a new "Call" tab with a mock video grid and a live transcript feed, wired to real data shapes so swapping in a real call/transcription provider is additive, not a rewrite.
-- **Utilization analytics** — `/analytics` now includes room-utilization and per-floor desk-utilization charts.
-- **Wayfinding** — room and desk cards show floor + zone ("3rd Floor · West Wing, near the elevator") so people can actually find what they booked.
-- **Slack slash-command scaffold** — `POST /api/slack/commands` parses a `/meetpilot book <room|desk>` style command and returns a mock confirmation. See the doc-comment in that file for the three things (signature verification, a registered Slack App, real DB writes) it needs before going live.
+> **This is a portfolio project**, not a commercial product. It runs against a
+> real Postgres database with real auth and a real LLM, but it is a
+> single-tenant demo: everyone who signs in shares one organisation and the
+> seeded data is fictional. See [Known limitations](#known-limitations).
 
-**v1** — auth, org/roles, unified online/offline/hybrid booking, Meeting Hub with MoM recall, action-item push, analytics.
+---
 
-## What's in this repo
+## Why this exists
 
-- **Next.js 14 (App Router) + TypeScript + Tailwind** — full UI for the Phase 1 MVP:
-  sign up / sign in / forgot password, dashboard, unified Create Meeting flow
-  (online / offline / hybrid with room browser), Meeting Hub (Agenda, Summary,
-  Action Items, Tickets Created, Analysis Report — with MoM recall for repeat
-  participant groups), profile, admin console (members & roles, integrations,
-  room inventory), and org-wide analytics.
-- **`prisma/schema.prisma`** — the real, production data model: every table
-  scoped by `orgId` for multi-tenancy, role stored on `OrgMembership` (not on
-  `User`), a `participantSetHash` field for the MoM-recall lookup, and an
-  `Integration` table for per-org OAuth connections to Jira/Asana/Linear.
-- **`src/lib/rbac.ts`** — centralized permission table (Org Admin / Team Lead /
-  Member / Guest).
-- **`src/lib/auth.ts`** — NextAuth wired for Google SSO + email/password.
-- **`src/lib/mock/*`** — an in-memory data layer implementing the exact same
-  shapes as the Prisma models, so the app runs and is fully click-through
-  without a live database. This is what today's pages import. Swapping to
-  production is a data-layer change only (see "Going to production" below) —
-  no page or component needs to change.
+The meeting-notes market is commoditised — Otter, Fireflies and Fathom all have
+free tiers, and Zoom, Teams and Google now bundle transcription natively.
+Summarising a meeting is not a product.
 
-## Running it locally
+The unsolved part is what happens *after*: a decision gets made, and then
+someone has to remember it, retype it into a backlog, decide how urgent it is,
+and chase it. MeetPilot targets that gap, and does it in a way that is safe to
+point at revenue systems — because the AI proposes and a human disposes.
+
+That last property is the point. In regulated environments, "AI proposed →
+human approved → immutably logged" isn't a nice-to-have; it's the control that
+makes the automation permissible at all.
+
+## What it does
+
+**Meetings → requests.** Upload a recording or transcript; an LLM produces the
+summary, decisions, topics and action items. In the **AI Review** tab it
+proposes tickets — then stops.
+
+**The human-in-the-loop gate.** A LangGraph state machine halts at an
+`interrupt()` and checkpoints itself. A reviewer approves, or rejects *with
+feedback* — in which case the agent re-reasons over the transcript with that
+correction and comes back for another round. Nothing reaches an external system
+until someone approves.
+
+**The request queue.** Every request against a revenue system — from meetings,
+filed directly, or raised by the health monitor — in one queue, ordered
+breached-SLA first, then priority, then soonest due.
+
+**The systems registry.** MeetPilot models the GTM systems it governs requests
+for (CRM, quoting/CPQ, billing, support desk, partner portal…) rather than
+integrating one vendor's API, so a request is filed against a capability with a
+named owner regardless of what implements it.
+
+**Monitoring.** A scheduled sweep looks for unowned systems, SLA breaches
+clustering on one system, and an ageing untriaged backlog — and files those as
+requests itself.
+
+**Audit.** Creation, triage, re-triage, status changes, system registration and
+password resets are written to an append-only log with actor and before/after
+values.
+
+## Architecture
+
+```
+Next.js 14 (App Router)  ──►  Supabase Postgres (RLS on, service-role reads)
+        │
+        └── HTTP ──►  FastAPI + LangGraph  ──►  checkpointer (SQLite / Postgres)
+                      the HITL state machine
+```
+
+- **Web** — Next.js 14, TypeScript, Tailwind, NextAuth (credentials + bcrypt), RBAC
+- **Data** — Supabase Postgres over PostgREST. RLS is on with no anon policies;
+  the app reads through a server-only service-role key
+- **Agent** — Python, LangGraph, FastAPI. `meeting_id` doubles as the graph's
+  `thread_id`, so a paused approval survives a restart
+- **LLM** — any OpenAI-compatible endpoint (`MEETPILOT_LLM_BASE_URL`), currently
+  Groq/Llama 3.3, or a deterministic offline mock for demos
+
+## Running it
+
+Prerequisites: Node 18+, Python 3.11+, a Supabase project.
 
 ```bash
+cp .env.example .env.local          # fill in Supabase + LLM credentials
 npm install
-npm run dev
+npm run db:push                     # schema + DB defaults + RLS
+npm run seed && npm run seed:revops # demo org, users, systems, request queue
+
+python3 -m venv orchestrator/.venv
+orchestrator/.venv/bin/pip install -r orchestrator/requirements.txt
+
+npm run start:all                   # both services, waits until both answer
 ```
 
-Open http://localhost:3000 — the whole flow (login → dashboard → create a
-meeting → meeting hub → push an action item → analytics) works immediately
-against the seeded demo org ("Acme Industries").
+Then sign in at `http://localhost:3000` — the seed script prints the demo
+credentials.
 
-## Going to production
+| Script | Purpose |
+|---|---|
+| `npm run start:all` | Next.js + orchestrator, with readiness checks |
+| `npm run start:demo` | …and reset the AI Review state first |
+| `npm run db:push` | Prisma push **plus** the defaults/RLS/timestamptz fixes Prisma drops |
+| `npm run demo:reset` | Re-date meetings and clear a previous demo run |
+| `npm test` | SLA and request-classification tests |
 
-1. **Database**: provision Postgres, set `DATABASE_URL` in `.env`, then:
-   ```bash
-   npx prisma migrate dev --name init
-   npx prisma generate
-   ```
-2. **Swap the data layer**: replace the functions in `src/lib/mock/store.ts`
-   with the equivalent `prisma.*` calls (each one already has the Prisma
-   call commented above it as a 1:1 reference).
-3. **Auth**: real NextAuth config already exists in `src/lib/auth.ts` — the
-   login/signup pages just need their `onSubmit` handlers pointed at
-   `signIn()` / a real registration API route instead of the demo-mode
-   `router.push()`.
-4. **Integrations**: implement the Jira/Asana/Linear OAuth callbacks referenced
-   in `prisma/schema.prisma`'s `Integration` model and wire the "Connect"
-   buttons in `/admin` to them.
-5. **Deploy**: `Dockerfile` included (multi-stage, production-ready). Any
-   platform that runs a container or a Next.js app (Vercel, Fly.io, ECS, etc.)
-   works.
+`DEMO.md` has a scene-by-scene walkthrough script.
 
-## Known limitations of the v2 additions
+## Known limitations
 
-- **Video calls** are a static mock grid, not a real call — wiring a real one means integrating a WebRTC/video SDK (Daily.co, Twilio Video, or LiveKit) and replacing the placeholder tiles with real video elements.
-- **Live transcript** is seeded mock data, not real-time — production needs a streaming transcription provider (AssemblyAI, Deepgram, or Whisper) fed from the call SDK's audio track.
-- **Slack slash command** has no signature verification yet — do not point a real Slack App at this route without adding HMAC verification first (see the comment in `src/app/api/slack/commands/route.ts`).
-- **Calendar sync tiles** (Google/Outlook) and **CRM tiles** (Salesforce/HubSpot) are OAuth-shaped UI only — no real OAuth flow or data sync is implemented yet; that's the same `Integration` model/pattern already used for Jira/Asana/Linear, just not yet backed by a real provider.
-- **Stripe billing** connect button is a UI toggle — real implementation needs Stripe Checkout/Billing API calls and webhook handling for payment status.
+Being explicit, because these are things a reviewer shouldn't have to discover
+for themselves:
 
-## Known limitations of this build
+- **Single-tenant.** `ORG_ID` is hardcoded — every signup joins the same
+  organisation and sees the same data. This is the main blocker to real users.
+- **Integration tokens are stored in plain text** in a column named
+  `accessTokenEnc`. Encryption at rest is not implemented.
+- **Transcription requires an upload.** There is no calendar integration and no
+  auto-join bot, which is what the incumbents lead with.
+- **PM-tool sync is one-way.** Pushing to Jira/Asana/Trello works; changes made
+  in those tools don't flow back.
+- **Email is optional and off by default.** Without `RESEND_API_KEY`, invites
+  and password resets can't be delivered — the UI says so rather than
+  pretending otherwise, and reset links are logged server-side instead.
+- **No rate limiting** on the AI endpoints.
 
-- Auth is in **demo mode** (any credentials log you in as the seeded user) —
-  see step 3 above to wire it to the already-configured real NextAuth flow.
-- PM-tool integrations are **mocked** — "Push to Jira/Linear/Asana" updates
-  local state only, no real ticket is created yet.
-- No test suite yet — recommended next addition: Playwright for the critical
-  path (login → create meeting → push action item) and unit tests for
-  `src/lib/rbac.ts` and the MoM-recall lookup.
+## Licence
 
-## Pushing to GitHub
-
-This repo is already git-initialized with an initial commit. To push:
-
-```bash
-git remote add origin <your-repo-url>
-git push -u origin main
-```
+MIT — see [LICENSE](LICENSE).

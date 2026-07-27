@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui";
 import { listAuditLog, listUsers } from "@/lib/db/store";
+import { getCaller } from "@/lib/authz";
+import { can } from "@/lib/rbac";
 
 // The real audit log. An earlier build shipped a hardcoded sentence here that
 // described events which never happened; this reads the append-only AuditLog
@@ -19,6 +21,17 @@ function describe(action: string, metadata: Record<string, unknown> | null): str
 }
 
 export default async function AuditLogPanel() {
+  // org:view_audit_log was declared in rbac.ts but never checked; a Reviewer
+  // could read the full governance trail.
+  const caller = await getCaller();
+  if (!caller || !can(caller.role, "org:view_audit_log")) {
+    return (
+      <Card className="text-sm text-slate-400">
+        Your role doesn&apos;t have access to the audit log.
+      </Card>
+    );
+  }
+
   const [entries, users] = await Promise.all([listAuditLog(25), listUsers()]);
   const usersById = Object.fromEntries(users.map((u) => [u.id, u]));
 

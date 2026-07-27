@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { createMeeting, createInstantMeeting, importOpenActionItemsFromPrevious } from "@/lib/db/store";
+import { requirePermission } from "@/lib/authz";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-  if (!userId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requirePermission("meeting:create");
+  if ("response" in auth) return auth.response;
+  const userId = auth.caller.user.id;
 
   const body = await req.json().catch(() => null);
 

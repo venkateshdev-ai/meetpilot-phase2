@@ -3,8 +3,9 @@
 // auth -> create meeting -> meeting hub -> action items -> chat -> analytics.
 // The old mock layer (src/lib/mock/*) was deleted once the last mock-backed
 // pages (rooms/desks/visitors/billing) were cut in the phase-2 pivot.
-import { pgSelect, pgInsert, pgUpdate, genId } from "./supabase";
+import { pgSelect, pgInsert, pgUpdate, pgDelete, genId } from "./supabase";
 import bcrypt from "bcryptjs";
+import { createHash } from "node:crypto";
 import type {
   RequestType,
   RequestPriority,
@@ -914,4 +915,100 @@ export async function orgWideAnalytics() {
       .map(([topic, weight]) => ({ topic, weight }))
       .sort((a, b) => b.weight - a.weight),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Password reset
+// ---------------------------------------------------------------------------
+// Tokens are stored HASHED. A leaked DB dump must not hand an attacker working
+// reset links, so the raw token only ever exists in the email we send.
+
+export async function createPasswordResetToken(userId: string): Promise<string> {
+  const raw = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  const tokenHash = createHash("sha256").update(raw).digest("hex");
+  await pgInsert("PasswordResetToken", {
+    id: genId("prt"),
+    userId,
+    tokenHash,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
+  });
+  return raw;
+}
+
+/**
+ * Exchange a raw token for the user it belongs to, then burn it.
+ * Returns undefined for anything unusable — unknown, expired, or already used —
+ * deliberately without saying which, so this cannot be used to probe for valid
+ * tokens.
+ */
+export async function consumePasswordResetToken(raw: string): Promise<DbUser | undefined> {
+  const tokenHash = createHash("sha256").update(raw).digest("hex");
+  const rows = await pgSelect<{ id: string; userId: string; expiresAt: string; usedAt: string | null }>(
+    "PasswordResetToken",
+    { tokenHash: `eq.${tokenHash}` }
+  );
+  const token = rows[0];
+  if (!token || token.usedAt || new Date(token.expiresAt).getTime() < Date.now()) return undefined;
+
+  await pgUpdate("PasswordResetToken", { id: `eq.${token.id}` }, { usedAt: new Date().toISOString() });
+  const users = await pgSelect<DbUser>("User", { id: `eq.${token.userId}` });
+  return users[0];
+}
+
+export async function setUserPassword(userId: string, password: string): Promise<void> {
+  const passwordHash = await bcrypt.hash(password, 10);
+  await pgUpdate("User", { id: `eq.${userId}` }, { passwordHash });
+  await recordAudit({
+    actorId: userId,
+    action: "user.password_reset",
+    targetType: "User",
+    targetId: userId,
+  });
+}
+
+export async function updateUserProfile(userId: string, patch: { name?: string }): Promise<DbUser> {
+  const [row] = await pgUpdate<DbUser>("User", { id: `eq.${userId}` }, patch);
+  await recordAudit({
+    actorId: userId,
+    action: "user.profile_updated",
+    targetType: "User",
+    targetId: userId,
+    metadata: patch,
+  });
+  return row;
+}
+
+/**
+ * Delete a meeting and everything hanging off it.
+ *
+ * The Prisma schema declares onDelete: Cascade for these relations, but that
+ * only applies where the FK was created with it — deleting children first is
+ * both explicit and safe regardless. Tickets are deliberately NOT deleted:
+ * an approved request is org work that outlives the meeting that raised it,
+ * so its meetingId is nulled instead.
+ */
+export async function deleteMeeting(meetingId: string, actorId: string): Promise<void> {
+  const meeting = await getMeeting(meetingId);
+  if (!meeting) throw new Error("Meeting not found");
+
+  await pgUpdate("Ticket", { meetingId: `eq.${meetingId}` }, { meetingId: null });
+
+  for (const table of [
+    "TranscriptSegment",
+    "ActionItem",
+    "MeetingParticipant",
+    "MeetingUpload",
+    "MeetingSummary",
+  ]) {
+    await pgDelete(table, { meetingId: `eq.${meetingId}` });
+  }
+  await pgDelete("Meeting", { id: `eq.${meetingId}` });
+
+  await recordAudit({
+    actorId,
+    action: "meeting.deleted",
+    targetType: "Meeting",
+    targetId: meetingId,
+    metadata: { title: meeting.title, startTime: meeting.startTime },
+  });
 }

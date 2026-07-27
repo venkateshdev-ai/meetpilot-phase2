@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
-import { Card, Badge, Avatar, TextField, Button } from "@/components/ui";
+import { Card, Badge, Avatar } from "@/components/ui";
+import ProfileForm from "./ProfileForm";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listActionItemsForUser, getMeeting, listMembershipsByRole } from "@/lib/db/store";
 import { Role, ROLE_LABELS } from "@/lib/rbac";
@@ -50,9 +51,7 @@ export default async function ProfilePage() {
 
       <Card className="mb-6">
         <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Account details</h3>
-        <TextField label="Full name" defaultValue={user.name ?? ""} />
-        <TextField label="Email" defaultValue={user.email} type="email" />
-        <Button variant="secondary">Save changes</Button>
+        <ProfileForm initialName={user.name ?? ""} email={user.email} />
       </Card>
 
       <Card>

@@ -315,8 +315,8 @@ export default function ReviewCenter({
                   <>
                     <Ticket size={12} className="text-success" />
                     {syncedTickets} ticket{syncedTickets === 1 ? "" : "s"} created in MeetPilot —{" "}
-                    <a href="/tickets" className="font-medium text-accent-400 hover:underline">
-                      view in Tickets
+                    <a href="/requests" className="font-medium text-accent-400 hover:underline">
+                      view in the request queue
                     </a>
                   </>
                 )}

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Search } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listMembershipsByRole } from "@/lib/db/store";
 import { ROLE_LABELS, Role } from "@/lib/rbac";
 import ChatSidebar from "@/components/ChatSidebar";
 import NavLinks from "@/components/NavLinks";
+import GlobalSearch from "@/components/GlobalSearch";
 
 function colorFor(id: string) {
   const AVATAR_COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#6d5bf8", "#2e5aac", "#94a3b8"];
@@ -53,10 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-base-700/70 bg-base-900/80 px-6 py-3.5 backdrop-blur">
-          <div className="flex w-64 items-center gap-2 rounded-xl border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-500 transition-colors hover:border-base-600">
-            <Search size={15} />
-            <span>Search team...</span>
-          </div>
+          <GlobalSearch />
           <Link href="/profile" className="rounded-full ring-2 ring-transparent transition hover:ring-accent-500/40">
             <Avatar name={user.name} color={colorFor(user.id)} size={32} />
           </Link>

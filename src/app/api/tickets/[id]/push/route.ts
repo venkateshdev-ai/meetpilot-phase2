@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { getTicketById, getOrgIntegration, updateTicket } from "@/lib/db/store";
+import { requirePermission } from "@/lib/authz";
 import { getAdapter, formatTicketDescription } from "@/lib/integrations";
 
 // Pushes a MeetPilot Ticket to whichever connected tool the caller chooses.
@@ -11,8 +10,8 @@ import { getAdapter, formatTicketDescription } from "@/lib/integrations";
 // that function for why (none of these tools have native custom fields for
 // this without extra per-tool setup).
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await requirePermission("actionitem:push_to_tool");
+  if ("response" in auth) return auth.response;
 
   const body = await req.json().catch(() => null);
   const provider = body?.provider?.toUpperCase();
