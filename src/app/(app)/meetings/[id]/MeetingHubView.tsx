@@ -11,6 +11,7 @@ import { Card, Badge, Tabs, Avatar, Button, Modal } from "@/components/ui";
 import type { DbMeeting, DbActionItem, DbUser } from "@/lib/db/store";
 import UploadPanel from "./UploadPanel";
 import MomPanel from "./MomPanel";
+import ReviewCenter from "@/components/ReviewCenter";
 
 const PIE_COLORS = ["#6d5bf8", "#2e5aac", "#22c55e", "#f59e0b", "#ef4444"];
 
@@ -93,7 +94,7 @@ export default function MeetingHubView({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-1 text-2xl font-bold">{meeting.title}</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight">{meeting.title}</h1>
       <p className="mb-5 text-sm text-slate-400">
         {new Date(meeting.startTime).toLocaleString("en-US", {
           month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
@@ -118,8 +119,8 @@ export default function MeetingHubView({
           <div className="flex items-start gap-3 text-sm text-slate-400">
             <History size={18} className="mt-0.5" />
             <span>
-              First time this group is meeting — no prior MoM found. A prep brief has been generated from
-              participants' calendars and roles instead.
+              First time this group is meeting — no prior minutes to carry forward. Once this meeting has
+              notes, the next one with the same participants will surface them here automatically.
             </span>
           </div>
         </Card>
@@ -194,11 +195,13 @@ export default function MeetingHubView({
                 </div>
                 <Card>
                   <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold">
-                    <Mic size={14} /> Live transcript
+                    <Mic size={14} /> Transcript
                   </h4>
                   {transcript.length === 0 ? (
                     <p className="text-sm text-slate-400">
-                      Transcript will appear here once the call starts real-time transcription (mock).
+                      No transcript yet — upload the recording or notes in the{" "}
+                      <span className="font-medium text-slate-300">Upload</span> tab and MeetPilot will
+                      transcribe and summarize it.
                     </p>
                   ) : (
                     <div className="max-h-64 space-y-3 overflow-y-auto">
@@ -238,6 +241,21 @@ export default function MeetingHubView({
             content: <UploadPanel meetingId={meeting.id} />,
           },
           {
+            key: "review",
+            label: "AI Review",
+            // HITL governance gate — proposed tickets from the LangGraph
+            // orchestrator park here for human approval before any CRM write.
+            // The meeting id doubles as the orchestrator's thread_id.
+            content: (
+              <ReviewCenter
+                meetingId={meeting.id}
+                transcript={transcript
+                  .map((t) => `${getUser(t.speakerUserId)?.name ?? "Speaker"}: ${t.text}`)
+                  .join("\n")}
+              />
+            ),
+          },
+          {
             key: "summary",
             label: "Summary",
             content: s ? (
@@ -257,6 +275,19 @@ export default function MeetingHubView({
                     {(s.keyDecisions ?? []).map((d: string) => <li key={d}>{d}</li>)}
                   </ul>
                 </div>
+                {(s.topicsJson ?? []).length > 0 && (
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold">Topics covered</h4>
+                    <ResponsiveContainer width="100%" height={Math.max(120, (s.topicsJson?.length ?? 0) * 30)}>
+                      <BarChart data={s.topicsJson} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <XAxis type="number" hide />
+                        <YAxis type="category" dataKey="topic" stroke="#64748b" fontSize={11} width={130} />
+                        <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
+                        <Bar dataKey="weight" fill="#6d5bf8" radius={4} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </Card>
             ) : (
               <Card className="text-sm text-slate-400">Summary will generate once the meeting has taken place.</Card>
@@ -346,56 +377,6 @@ export default function MeetingHubView({
                   </tbody>
                 </table>
               </Card>
-            ),
-          },
-          {
-            key: "analysis",
-            label: "Analysis Report",
-            content: s ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Card>
-                  <h4 className="mb-3 text-sm font-semibold">Meeting sentiment trend</h4>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <LineChart data={s.sentimentTrend}>
-                      <XAxis dataKey="t" stroke="#64748b" fontSize={11} />
-                      <YAxis hide domain={[0, 1]} />
-                      <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-                      <Line type="monotone" dataKey="score" stroke="#6d5bf8" strokeWidth={2} dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Card>
-                <Card>
-                  <h4 className="mb-3 text-sm font-semibold">Talk time distribution</h4>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <PieChart>
-                      <Pie data={s.talkTimeByUser} dataKey="minutes" nameKey="userId" innerRadius={40} outerRadius={65}>
-                        {(s.talkTimeByUser ?? []).map((_: unknown, i: number) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Card>
-                <Card>
-                  <h4 className="mb-3 text-sm font-semibold">Meeting ROI</h4>
-                  <div className="flex h-40 flex-col items-center justify-center">
-                    <div className="text-4xl font-bold text-accent-400">{s.meetingRoiPercent}%</div>
-                    <div className="text-xs text-slate-500">time on-goal vs. spent</div>
-                  </div>
-                </Card>
-                <Card>
-                  <h4 className="mb-3 text-sm font-semibold">Frequent topics</h4>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={s.topicsJson ?? s.topics} layout="vertical">
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="topic" stroke="#64748b" fontSize={11} width={90} />
-                      <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-                      <Bar dataKey="weight" fill="#2e5aac" radius={4} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              </div>
-            ) : (
-              <Card className="text-sm text-slate-400">Analysis will generate once the meeting has taken place.</Card>
             ),
           },
         ]}

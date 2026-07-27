@@ -5,6 +5,13 @@
 // pages (rooms/desks/visitors/billing) were cut in the phase-2 pivot.
 import { pgSelect, pgInsert, pgUpdate, genId } from "./supabase";
 import bcrypt from "bcryptjs";
+import type {
+  RequestType,
+  RequestPriority,
+  RequestSource,
+  SystemCategory,
+} from "@/lib/revops";
+import { slaDueAt } from "@/lib/revops";
 
 const ORG_ID = "org_acme"; // single-tenant for this build; every query is still orgId-scoped
 
@@ -454,15 +461,19 @@ export async function createActionItemsFromAi(
   const members = await listUsers();
 
   const rows = items.map((item) => {
-    const match = item.assigneeName
+    const match = item.assigneeName?.trim()
       ? members.find((u) => u.name?.toLowerCase().includes(item.assigneeName!.toLowerCase()))
       : undefined;
+    // LLMs sometimes emit "" instead of omitting dueDate; Postgres rejects ""
+    // for a timestamp (22007), and an unparseable date is equally useless —
+    // only pass through values that are real dates, else null.
+    const due = item.dueDate?.trim();
     return {
       id: genId("ai"),
       meetingId,
       description: item.description,
       assigneeId: match?.id ?? null,
-      dueDate: item.dueDate ?? null,
+      dueDate: due && !Number.isNaN(Date.parse(due)) ? due : null,
       status: "OPEN",
     };
   });
@@ -550,6 +561,15 @@ export interface DbTicket {
   telemetry: string | null;
   successMetric: string | null;
   status: "OPEN" | "IN_PROGRESS" | "DONE" | "BLOCKED";
+  requestType: RequestType;
+  priority: RequestPriority;
+  source: RequestSource;
+  systemId: string | null;
+  requestedById: string | null;
+  slaDueAt: string | null;
+  triagedAt: string | null;
+  triagedById: string | null;
+  resolvedAt: string | null;
   assigneeId: string | null;
   createdById: string;
   provider: string | null;
@@ -574,12 +594,28 @@ export async function createTicket(input: {
   actionItemId?: string | null;
   assigneeId?: string | null;
   createdById: string;
+  // RevOps classification. Callers may leave these off — the defaults make an
+  // untriaged P2 change request, which is exactly what lands in the queue.
+  requestType?: RequestType;
+  priority?: RequestPriority;
+  source?: RequestSource;
+  systemId?: string | null;
+  requestedById?: string | null;
 }): Promise<DbTicket> {
+  const priority = input.priority ?? "P2";
   const [row] = await pgInsert<DbTicket>("Ticket", {
     id: genId("tkt"),
     orgId: ORG_ID,
     meetingId: input.meetingId ?? null,
     actionItemId: input.actionItemId ?? null,
+    requestType: input.requestType ?? "CHANGE_REQUEST",
+    priority,
+    source: input.source ?? "DIRECT",
+    systemId: input.systemId ?? null,
+    requestedById: input.requestedById ?? null,
+    // The clock starts on arrival, not on triage — otherwise a request could
+    // sit untouched in the queue forever without ever showing as overdue.
+    slaDueAt: slaDueAt(priority),
     title: input.title,
     description: input.description ?? null,
     whyScenario: input.whyScenario ?? null,
@@ -592,11 +628,218 @@ export async function createTicket(input: {
     assigneeId: input.assigneeId ?? null,
     createdById: input.createdById,
   });
+
+  await recordAudit({
+    actorId: input.createdById,
+    action: "request.created",
+    targetType: "Ticket",
+    targetId: row.id,
+    metadata: {
+      title: row.title,
+      source: row.source,
+      priority: row.priority,
+      requestType: row.requestType,
+      meetingId: row.meetingId,
+    },
+  });
+
   return row;
 }
 
 export async function listTicketsForOrg(): Promise<DbTicket[]> {
   return pgSelect<DbTicket>("Ticket", { orgId: `eq.${ORG_ID}`, order: "createdAt.desc" });
+}
+
+/**
+ * Triage a request: classify it, commit to an SLA, and route it to an owner.
+ *
+ * This is the moment a raw request becomes an accountable commitment, so it is
+ * also the moment the SLA clock starts — `slaDueAt` is derived from the agreed
+ * priority rather than accepted from the caller, which keeps the policy in one
+ * place (src/lib/revops.ts) instead of scattered across callers.
+ *
+ * Re-triaging is allowed (priorities legitimately change), and each pass is
+ * written to the audit log with the before/after values.
+ */
+export async function triageTicket(
+  id: string,
+  input: {
+    requestType?: RequestType;
+    priority?: RequestPriority;
+    systemId?: string | null;
+    assigneeId?: string | null;
+    status?: DbTicket["status"];
+    acceptanceCriteria?: string;
+  },
+  actorId: string
+): Promise<DbTicket> {
+  const before = await getTicketById(id);
+  if (!before) throw new Error(`Ticket ${id} not found`);
+
+  const priority = input.priority ?? before.priority;
+  const patch: Record<string, unknown> = {
+    ...(input.requestType ? { requestType: input.requestType } : {}),
+    ...(input.systemId !== undefined ? { systemId: input.systemId } : {}),
+    ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
+    ...(input.acceptanceCriteria !== undefined ? { acceptanceCriteria: input.acceptanceCriteria } : {}),
+    priority,
+    triagedAt: new Date().toISOString(),
+    triagedById: actorId,
+  };
+
+  // Re-derive the deadline whenever priority changes (or on first triage), so
+  // an escalation to P0 actually pulls the due date in.
+  if (!before.triagedAt || priority !== before.priority) {
+    patch.slaDueAt = slaDueAt(priority);
+  }
+
+  if (input.status) {
+    patch.status = input.status;
+    // Closing stops the SLA clock; reopening clears the stale resolution time.
+    patch.resolvedAt = input.status === "DONE" ? new Date().toISOString() : null;
+  }
+
+  const [row] = await pgUpdate<DbTicket>("Ticket", { id: `eq.${id}` }, patch);
+
+  await recordAudit({
+    actorId,
+    action: before.triagedAt ? "request.retriaged" : "request.triaged",
+    targetType: "Ticket",
+    targetId: id,
+    metadata: {
+      title: before.title,
+      before: {
+        priority: before.priority,
+        requestType: before.requestType,
+        status: before.status,
+        systemId: before.systemId,
+        assigneeId: before.assigneeId,
+      },
+      after: {
+        priority: row.priority,
+        requestType: row.requestType,
+        status: row.status,
+        systemId: row.systemId,
+        assigneeId: row.assigneeId,
+        slaDueAt: row.slaDueAt,
+      },
+    },
+  });
+
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (append-only)
+// ---------------------------------------------------------------------------
+// Every state change a reviewer or auditor would ask about goes through here:
+// who did what, to which object, and with what before/after. The AuditLog
+// table existed in the schema from the start but nothing wrote to it — so the
+// product claimed governance it could not evidence. These are those writes.
+
+export interface DbAuditLog {
+  id: string;
+  orgId: string;
+  actorId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export async function recordAudit(entry: {
+  actorId?: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await pgInsert("AuditLog", {
+      id: genId("aud"),
+      orgId: ORG_ID,
+      actorId: entry.actorId ?? null,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      metadata: entry.metadata ?? null,
+    });
+  } catch (err) {
+    // Audit writes must never break the user's action. A failure here is a
+    // monitoring concern, not a reason to fail the request that triggered it.
+    console.error("[audit] failed to record", entry.action, err);
+  }
+}
+
+export async function listAuditLog(limit = 50): Promise<DbAuditLog[]> {
+  return pgSelect<DbAuditLog>("AuditLog", {
+    orgId: `eq.${ORG_ID}`,
+    order: "createdAt.desc",
+    limit: String(limit),
+  });
+}
+
+export async function listAuditForTarget(targetId: string): Promise<DbAuditLog[]> {
+  return pgSelect<DbAuditLog>("AuditLog", {
+    targetId: `eq.${targetId}`,
+    order: "createdAt.desc",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// RevOps: GTM systems registry
+// ---------------------------------------------------------------------------
+// MeetPilot models the revenue systems it governs requests for (CRM, CPQ,
+// support desk, partner portal…) as first-class rows rather than integrating
+// one vendor's API. Every request is filed against a system, and every system
+// has a named owner — so "who owns this?" is always answerable.
+
+export interface DbGtmSystem {
+  id: string;
+  orgId: string;
+  name: string;
+  category: SystemCategory;
+  description: string | null;
+  ownerId: string | null;
+  status: "HEALTHY" | "DEGRADED" | "DOWN";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listGtmSystems(): Promise<DbGtmSystem[]> {
+  return pgSelect<DbGtmSystem>("GtmSystem", { orgId: `eq.${ORG_ID}`, order: "name.asc" });
+}
+
+export async function getGtmSystem(id: string): Promise<DbGtmSystem | undefined> {
+  const rows = await pgSelect<DbGtmSystem>("GtmSystem", { id: `eq.${id}` });
+  return rows[0];
+}
+
+export async function createGtmSystem(input: {
+  name: string;
+  category: SystemCategory;
+  description?: string;
+  ownerId?: string | null;
+}): Promise<DbGtmSystem> {
+  const [row] = await pgInsert<DbGtmSystem>("GtmSystem", {
+    id: genId("sys"),
+    orgId: ORG_ID,
+    name: input.name,
+    category: input.category,
+    description: input.description ?? null,
+    ownerId: input.ownerId ?? null,
+  });
+  return row;
+}
+
+export async function updateGtmSystem(
+  id: string,
+  patch: Partial<Pick<DbGtmSystem, "name" | "category" | "description" | "ownerId" | "status" | "isActive">>
+): Promise<DbGtmSystem> {
+  const [row] = await pgUpdate<DbGtmSystem>("GtmSystem", { id: `eq.${id}` }, patch);
+  return row;
 }
 
 export async function getTicketById(id: string): Promise<DbTicket | undefined> {
@@ -650,9 +893,6 @@ export async function orgWideAnalytics() {
   const actionItems = await pgSelect<DbActionItem>("ActionItem", {});
   const summaries = await pgSelect<any>("MeetingSummary", {});
 
-  const avgRoi =
-    summaries.reduce((sum, s) => sum + (s.meetingRoiPercent ?? 0), 0) / (summaries.length || 1);
-
   const statusCounts: Record<string, number> = { OPEN: 0, IN_PROGRESS: 0, DONE: 0, BLOCKED: 0 };
   actionItems.forEach((a) => {
     statusCounts[a.status] = (statusCounts[a.status] ?? 0) + 1;
@@ -666,9 +906,9 @@ export async function orgWideAnalytics() {
   });
 
   return {
-    avgRoi: Math.round(avgRoi),
     totalMeetings: meetings.length,
     completedMeetings: meetings.filter((m) => m.status === "COMPLETED").length,
+    openActionItems: (statusCounts.OPEN ?? 0) + (statusCounts.IN_PROGRESS ?? 0),
     statusCounts,
     topics: Object.entries(topicWeights)
       .map(([topic, weight]) => ({ topic, weight }))

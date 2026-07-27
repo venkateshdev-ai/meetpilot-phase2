@@ -18,7 +18,11 @@ export type Permission =
   | "org:manage_members"
   | "org:manage_admins"
   | "org:view_audit_log"
-  | "analytics:view_org_wide";
+  | "analytics:view_org_wide"
+  // Triaging sets an SLA — a commitment the org makes to a stakeholder — so it
+  // is an admin action, distinct from merely filing or viewing a request.
+  | "request:triage"
+  | "system:manage";
 
 const PERMISSIONS: Record<Role, Permission[]> = {
   GLOBAL_ADMIN: [
@@ -31,6 +35,8 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "org:manage_admins",
     "org:view_audit_log",
     "analytics:view_org_wide",
+    "request:triage",
+    "system:manage",
   ],
   ADMIN: [
     "meeting:create",
@@ -40,6 +46,8 @@ const PERMISSIONS: Record<Role, Permission[]> = {
     "org:manage_members",
     "org:view_audit_log",
     "analytics:view_org_wide",
+    "request:triage",
+    "system:manage",
   ],
   REVIEWER: [
     "meeting:create",

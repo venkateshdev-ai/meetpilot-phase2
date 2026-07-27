@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { Home, Users, BarChart3, Settings, Search, Ticket } from "lucide-react";
+import { Search } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { authOptions } from "@/lib/auth";
 import { findUserByEmail, listMembershipsByRole } from "@/lib/db/store";
 import { ROLE_LABELS, Role } from "@/lib/rbac";
 import ChatSidebar from "@/components/ChatSidebar";
+import NavLinks from "@/components/NavLinks";
 
 function colorFor(id: string) {
   const AVATAR_COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#6d5bf8", "#2e5aac", "#94a3b8"];
@@ -14,14 +15,6 @@ function colorFor(id: string) {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
-
-const NAV = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/tickets", label: "Tickets", icon: Ticket },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/users", label: "Users", icon: Users },
-  { href: "/admin", label: "Settings", icon: Settings },
-];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -39,45 +32,36 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   };
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-base-700 bg-base-800/40 p-4">
-        <Link href="/dashboard" className="mb-8 flex items-center gap-2 px-2">
-          <span className="h-7 w-7 rounded-lg bg-brand-gradient" />
-          <span className="font-bold">MeetPilot</span>
+      <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-base-700/70 bg-base-950/60 p-4 backdrop-blur">
+        <Link href="/dashboard" className="mb-8 flex items-center gap-2.5 px-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient shadow-glow">
+            <span className="h-3 w-3 rounded-sm bg-white/90" />
+          </span>
+          <span className="text-[15px] font-bold tracking-tight">MeetPilot</span>
         </Link>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-base-700 hover:text-white"
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <NavLinks />
         <Link
           href="/profile"
-          className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-base-700"
+          className="flex items-center gap-2.5 rounded-xl border border-transparent px-2 py-2 transition-colors hover:border-base-700 hover:bg-base-800/60"
         >
-          <Avatar name={user.name} color={colorFor(user.id)} size={28} />
-          <div className="text-xs">
-            <div className="font-medium text-slate-100">{user.name}</div>
-            <div className="text-slate-500">{user.roleLabel}</div>
+          <Avatar name={user.name} color={colorFor(user.id)} size={30} />
+          <div className="min-w-0 text-xs">
+            <div className="truncate font-medium text-slate-100">{user.name}</div>
+            <div className="truncate text-slate-500">{user.roleLabel}</div>
           </div>
         </Link>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-base-700 px-6 py-4">
-          <div className="flex items-center gap-2 rounded-xl border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-400">
-            <Search size={16} />
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-base-700/70 bg-base-900/80 px-6 py-3.5 backdrop-blur">
+          <div className="flex w-64 items-center gap-2 rounded-xl border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-500 transition-colors hover:border-base-600">
+            <Search size={15} />
             <span>Search team...</span>
           </div>
-          <Link href="/profile">
+          <Link href="/profile" className="rounded-full ring-2 ring-transparent transition hover:ring-accent-500/40">
             <Avatar name={user.name} color={colorFor(user.id)} size={32} />
           </Link>
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6 lg:p-8">{children}</main>
       </div>
       <ChatSidebar currentUserName={user.name} />
     </div>

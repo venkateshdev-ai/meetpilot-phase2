@@ -7,3 +7,10 @@ node_modules
 dist
 .claude/settings.local.json
 tsconfig.tsbuildinfo
+scripts/logs/
+
+# Points at the live Supabase project — keep local
+.mcp.json
+.agents/
+skills-lock.json
+.claude/skills/

@@ -7,7 +7,7 @@ export interface AnalyticsData {
   stats: {
     totalMeetings: number;
     completedMeetings: number;
-    avgRoi: number;
+    openActionItems: number;
     statusCounts: Record<string, number>;
     topics: { topic: string; weight: number }[];
   };
@@ -18,7 +18,7 @@ export default function AnalyticsView({ stats }: AnalyticsData) {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">Analytics</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight">Analytics</h1>
       <p className="mb-6 text-sm text-slate-400">
         Org-wide rollup across all meetings and action items — live from the database.
       </p>
@@ -33,8 +33,8 @@ export default function AnalyticsView({ stats }: AnalyticsData) {
           <div className="text-xs text-slate-500">Completed</div>
         </Card>
         <Card className="text-center">
-          <div className="text-2xl font-bold text-accent-400">{stats.avgRoi}%</div>
-          <div className="text-xs text-slate-500">Avg. meeting ROI</div>
+          <div className="text-2xl font-bold text-accent-400">{stats.openActionItems}</div>
+          <div className="text-xs text-slate-500">Open action items</div>
         </Card>
         <Card className="text-center">
           <div className="text-2xl font-bold text-accent-400">{stats.statusCounts.DONE ?? 0}</div>
@@ -56,14 +56,21 @@ export default function AnalyticsView({ stats }: AnalyticsData) {
         </Card>
         <Card>
           <h4 className="mb-3 text-sm font-semibold">Top topics across meetings</h4>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={stats.topics} layout="vertical">
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="topic" stroke="#64748b" fontSize={11} width={100} />
-              <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
-              <Bar dataKey="weight" fill="#2e5aac" radius={4} />
-            </BarChart>
-          </ResponsiveContainer>
+          {stats.topics.length === 0 ? (
+            // An empty chart frame reads as a broken widget — say why instead.
+            <p className="py-12 text-center text-sm text-slate-500">
+              No topics yet. Upload a recording or notes to a meeting and MeetPilot will extract them.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={stats.topics} layout="vertical">
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="topic" stroke="#64748b" fontSize={11} width={100} />
+                <Tooltip contentStyle={{ background: "#101627", border: "1px solid #1a2138" }} />
+                <Bar dataKey="weight" fill="#2e5aac" radius={4} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </Card>
       </div>
     </div>

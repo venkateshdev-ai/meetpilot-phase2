@@ -5,12 +5,16 @@ const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       colors: {
         base: {
           950: "#05070d",
           900: "#0a0f1e",
           800: "#101627",
           700: "#1a2138",
+          600: "#252d4a",
         },
         accent: {
           500: "#6d5bf8",
@@ -31,6 +35,12 @@ const config: Config = {
       },
       backgroundImage: {
         "brand-gradient": "linear-gradient(135deg, #6d5bf8 0%, #2e5aac 100%)",
+        "hero-glow":
+          "radial-gradient(ellipse 60% 40% at 50% -10%, rgba(109,91,248,0.22), transparent), radial-gradient(ellipse 40% 30% at 85% 0%, rgba(46,90,172,0.18), transparent)",
+      },
+      boxShadow: {
+        glow: "0 0 24px -6px rgba(109,91,248,0.45)",
+        card: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.5)",
       },
     },
   },

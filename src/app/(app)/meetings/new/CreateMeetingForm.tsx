@@ -64,7 +64,7 @@ export default function CreateMeetingForm({ users }: { users: DbUser[] }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 text-2xl font-bold">Create meeting</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight">Create meeting</h1>
       <p className="mb-6 text-sm text-slate-400">
         Choose online, offline, or hybrid — MeetPilot handles scheduling either way.
       </p>

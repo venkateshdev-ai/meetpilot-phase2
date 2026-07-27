@@ -7,9 +7,9 @@ import { Button, TextField } from "@/components/ui";
 export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-base-700 bg-base-800/60 p-8 text-center">
-        <span className="mx-auto mb-4 block h-12 w-12 rounded-2xl bg-brand-gradient" />
+    <main className="flex min-h-screen items-center justify-center bg-hero-glow px-4">
+      <div className="w-full max-w-md rounded-2xl border border-base-700/80 bg-base-800/60 p-8 shadow-card backdrop-blur-sm text-center">
+        <span className="mx-auto mb-4 block h-12 w-12 rounded-2xl bg-brand-gradient shadow-glow" />
         {sent ? (
           <>
             <h1 className="mb-2 text-xl font-bold">Check your email</h1>

@@ -16,17 +16,18 @@
 // still commented in src/lib/db/store.ts) since a normal environment can
 // download the Prisma engine fine.
 //
-// SECURITY NOTE (surfaced, not silently fixed): Row Level Security is
-// currently OFF on every table in this Supabase project, so the anon key
-// used here has full read/write access to all data. That's acceptable ONLY
-// because this key lives server-side only (never sent to the browser, never
-// NEXT_PUBLIC_-prefixed). Before any real/public deployment, either (a)
-// enable RLS with real policies scoped by orgId, or (b) switch this file to
-// use the project's service_role key (also server-only) and enable RLS with
-// service-role-bypass semantics. Do not ship this as-is to a public URL.
+// SECURITY POSTURE: RLS is ENABLED on every table with NO policies for
+// anon/authenticated (default-deny). This file therefore uses the
+// service_role key — which bypasses RLS — so the app keeps full access,
+// while the anon key (or anyone hitting the Data API directly) can no
+// longer read or write anything. Both keys are server-side only (never
+// NEXT_PUBLIC_-prefixed, never sent to the browser). Org-scoping remains
+// enforced in this data-access layer (every query filters by orgId).
+// The anon-key fallback below only matters for a fresh env missing the
+// service key — with RLS on, anon gets empty results, which fails safe.
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY!;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY!;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   // Fail loudly at import time in dev rather than silently returning empty data.

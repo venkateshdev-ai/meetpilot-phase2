@@ -26,7 +26,7 @@ export default async function UsersPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="mb-1 text-2xl font-bold">User management</h1>
+        <h1 className="mb-1 text-2xl font-bold tracking-tight">User management</h1>
         <p className="text-sm text-slate-400">
           Roles: Global Admin (full control), Admin (manages users & integrations), Reviewer (read-only for
           users). You are signed in as {ROLE_LABELS[viewerRole]}.

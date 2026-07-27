@@ -91,6 +91,51 @@ enum BookingStatus {
   NO_SHOW
 }
 
+
+// --- RevOps request management -------------------------------------------
+// MeetPilot owns its own model of the GTM systems it serves (CRM, CPQ,
+// support desk, partner portal…) rather than integrating a specific vendor.
+// That keeps the request/triage domain vendor-neutral: a request is filed
+// against a *system we registered*, not against a Salesforce org id.
+
+enum RequestType {
+  RUN_THE_BUSINESS  // break/fix on an existing system
+  CHANGE_REQUEST    // enhancement or new capability
+  INCIDENT          // active outage or degradation
+  ACCESS            // permissions / provisioning
+  DATA_FIX          // data correction or backfill
+}
+
+enum RequestPriority {
+  P0  // business stopped
+  P1  // major impact, workaround exists
+  P2  // normal
+  P3  // low / backlog
+}
+
+enum RequestSource {
+  MEETING   // extracted from a meeting by the AI review gate
+  DIRECT    // filed by a person in the app
+  MONITOR   // opened automatically by a system health check
+}
+
+enum SystemStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+}
+
+enum SystemCategory {
+  CRM
+  CPQ
+  BILLING
+  SUPPORT
+  PARTNER
+  ANALYTICS
+  ENGAGEMENT
+  OTHER
+}
+
 model Org {
   id           String         @id @default(cuid())
   name         String
@@ -108,6 +153,7 @@ model Org {
   visitors     Visitor[]
   invoices     Invoice[]
   tickets      Ticket[]
+  gtmSystems   GtmSystem[]
 }
 
 model User {
@@ -132,6 +178,9 @@ model User {
   uploadedFiles       MeetingUpload[]  @relation("UploadedBy")
   createdTickets      Ticket[]         @relation("TicketCreatedBy")
   assignedTickets     Ticket[]         @relation("TicketAssignee")
+  requestedTickets    Ticket[]         @relation("TicketRequestedBy")
+  triagedTickets      Ticket[]         @relation("TicketTriagedBy")
+  ownedSystems        GtmSystem[]      @relation("SystemOwner")
   chatMessages        ChatMessage[]
 
   @@index([email])
@@ -359,6 +408,31 @@ model MeetingUpload {
 // "why scenario" or "success metric", the push adapters
 // (src/lib/integrations/*.ts) format all of these into the target ticket's
 // description as labeled sections — this table is the source of truth.
+
+// A revenue-facing system MeetPilot governs requests for. This is the
+// vendor-neutral stand-in for "Sales Cloud / CPQ / Service Cloud / partner
+// portal" — each row has a named owner, so every request has an accountable
+// person, and a health status that monitoring can flip.
+model GtmSystem {
+  id          String         @id @default(cuid())
+  orgId       String
+  name        String
+  category    SystemCategory @default(OTHER)
+  description String?
+  ownerId     String?
+  status      SystemStatus   @default(HEALTHY)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  org      Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner    User?    @relation("SystemOwner", fields: [ownerId], references: [id])
+  tickets  Ticket[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
 model Ticket {
   id                 String              @id @default(cuid())
   orgId              String
@@ -373,6 +447,21 @@ model Ticket {
   telemetry          String?
   successMetric      String?
   status             TicketStatus        @default(OPEN)
+
+  // --- RevOps triage layer ---
+  // A ticket in MeetPilot is a *request against a revenue system*: it arrives
+  // from a meeting, a person, or a monitor; it is classified and prioritised;
+  // and its SLA clock is derived from that priority at triage time.
+  requestType        RequestType         @default(CHANGE_REQUEST)
+  priority           RequestPriority     @default(P2)
+  source             RequestSource       @default(DIRECT)
+  systemId           String?
+  requestedById      String?
+  slaDueAt           DateTime?
+  triagedAt          DateTime?
+  triagedById        String?
+  resolvedAt         DateTime?
+
   assigneeId         String?
   createdById        String
   provider           IntegrationProvider?
@@ -388,9 +477,14 @@ model Ticket {
   actionItem ActionItem? @relation(fields: [actionItemId], references: [id], onDelete: SetNull)
   assignee   User?       @relation("TicketAssignee", fields: [assigneeId], references: [id])
   createdBy  User        @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  system     GtmSystem?  @relation(fields: [systemId], references: [id], onDelete: SetNull)
+  requestedBy User?      @relation("TicketRequestedBy", fields: [requestedById], references: [id])
+  triagedBy  User?       @relation("TicketTriagedBy", fields: [triagedById], references: [id])
 
   @@index([orgId])
   @@index([meetingId])
+  @@index([orgId, status, priority])
+  @@index([systemId])
 }
 
 // Append-only send log for outbound email (invites, add-user notifications).

@@ -9,7 +9,14 @@
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start:all": "./scripts/start.sh",
+    "start:demo": "./scripts/start.sh --fresh",
+    "seed": "node scripts/seed.mjs",
+    "demo:reset": "node scripts/reset-demo.mjs",
+    "db:push": "prisma db push --skip-generate && node scripts/fix-db-defaults.mjs",
+    "seed:revops": "node scripts/seed-revops.mjs",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",
@@ -38,6 +45,7 @@
     "postcss": "^8.4.40",
     "prisma": "^5.19.1",
     "tailwindcss": "^3.4.7",
+    "tsx": "^4.23.1",
     "typescript": "^5.5.4"
   }
 }

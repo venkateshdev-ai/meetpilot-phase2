@@ -1,0 +1,14 @@
+# MeetPilot HITL orchestrator — core runtime
+langgraph>=0.2.60
+langgraph-checkpoint-sqlite>=2.0.0   # SqliteSaver: durable state for the API
+fastapi>=0.115.0
+uvicorn>=0.32.0
+python-dotenv>=1.0.0                 # loads orchestrator/.env
+
+# LLM providers. The graph runs fully offline on the built-in MockChatModel
+# (MEETPILOT_LLM_PROVIDER=mock), so only install what you actually point at.
+langchain-openai>=0.2.0              # provider=openai — ANY OpenAI-compatible
+                                     # endpoint via MEETPILOT_LLM_BASE_URL
+                                     # (Groq, Together, vLLM, Ollama, LM Studio)
+# langchain-anthropic>=0.3.0         # provider=anthropic
+# langchain-aws>=0.2.0               # provider=bedrock

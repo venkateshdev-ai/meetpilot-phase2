@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/ui";
 import IntegrationsPanel from "./IntegrationsPanel";
+import AuditLogPanel from "./AuditLogPanel";
 
 // Settings: AI/LLM + PM-tool credentials and the audit trail. User management
 // lives on its own page now (/users).
@@ -13,12 +14,12 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div>
-        <h1 className="mb-1 text-2xl font-bold">Settings</h1>
+        <h1 className="mb-1 text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-slate-400">API keys and integrations.</p>
       </div>
 
       <section id="settings">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           API keys & integrations
         </h2>
         <p className="mb-3 -mt-2 text-xs text-slate-500">
@@ -29,10 +30,8 @@ export default async function SettingsPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Audit log</h2>
-        <Card className="text-sm text-slate-400">
-          Varan connected Linear · Hulk updated Batman's role to Admin · Varan created "Sprint Sync"
-        </Card>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Audit log</h2>
+        <AuditLogPanel />
       </section>
     </div>
   );

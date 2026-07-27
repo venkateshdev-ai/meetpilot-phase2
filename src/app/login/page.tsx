@@ -27,11 +27,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-base-700 bg-base-800/60 p-8">
-        <div className="mb-6 flex flex-col items-center gap-2">
-          <span className="h-12 w-12 rounded-2xl bg-brand-gradient" />
-          <h1 className="text-xl font-bold">MeetPilot</h1>
+    <main className="flex min-h-screen items-center justify-center bg-hero-glow px-4">
+      <div className="w-full max-w-md rounded-2xl border border-base-700/80 bg-base-800/60 p-8 shadow-card backdrop-blur-sm">
+        <div className="mb-6 flex flex-col items-center gap-2.5">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-gradient shadow-glow">
+            <span className="h-4 w-4 rounded bg-white/90" />
+          </span>
+          <h1 className="text-xl font-bold tracking-tight">MeetPilot</h1>
           <p className="text-sm text-slate-400">Sign in to your account</p>
         </div>
         <form onSubmit={handleSubmit}>
@@ -54,7 +56,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="mb-2 w-full rounded-xl border border-base-700 bg-base-900 px-3.5 py-2.5 text-sm text-white outline-none focus:border-accent-500"
+            className="mb-2 w-full rounded-xl border border-base-700 bg-base-900/80 px-3.5 py-2.5 text-sm text-white outline-none transition-colors focus:border-accent-500 focus:ring-2 focus:ring-accent-500/20"
           />
           {error && <p className="mb-3 text-xs text-danger">{error}</p>}
           <p className="mb-4 text-xs text-slate-500">

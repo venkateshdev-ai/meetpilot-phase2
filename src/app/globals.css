@@ -6,3 +6,46 @@ html,
 body {
   @apply bg-base-900 text-slate-100;
 }
+
+/* Subtle top glow behind every page — gives the flat dark background depth
+   without affecting layout. */
+body {
+  background-image: radial-gradient(ellipse 70% 35% at 50% -12%, rgba(109, 91, 248, 0.1), transparent);
+  background-repeat: no-repeat;
+}
+
+/* Slim, theme-matched scrollbars (WebKit + Firefox). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1a2138 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1a2138;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #252d4a;
+}
+
+::selection {
+  background: rgba(109, 91, 248, 0.35);
+}
+
+/* Consistent, accessible keyboard-focus rings everywhere. */
+:focus-visible {
+  outline: 2px solid rgba(139, 125, 251, 0.7);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer utilities {
+  /* Gradient text for hero/headline accents. */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(120deg, #a78bfa 0%, #8b7dfb 35%, #60a5fa 100%);
+  }
+}

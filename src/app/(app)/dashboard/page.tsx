@@ -42,7 +42,7 @@ export default async function DashboardPage() {
       <div className="lg:col-span-2">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Good afternoon, {firstName}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Good afternoon, {firstName}</h1>
             <p className="text-sm text-slate-400">Here's what's happening across Acme Industries.</p>
           </div>
           <div className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Upcoming meetings
         </h2>
         <div className="mb-8 flex flex-col gap-3">
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
           })}
         </div>
 
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Recent meetings
         </h2>
         <div className="flex flex-col gap-3">
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Team status</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Team status</h2>
         <Card className="flex flex-col gap-4">
           {users.map((u) => {
             const role = (roleByUser[u.id] ?? "REVIEWER") as Role;
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
           })}
         </Card>
 
-        <h2 className="mb-3 mt-6 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="mb-3 mt-6 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Quick links
         </h2>
         <Card className="flex flex-col gap-2">

@@ -49,14 +49,14 @@ export default async function ProfilePage() {
       </Card>
 
       <Card className="mb-6">
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Account details</h3>
+        <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Account details</h3>
         <TextField label="Full name" defaultValue={user.name ?? ""} />
         <TextField label="Email" defaultValue={user.email} type="email" />
         <Button variant="secondary">Save changes</Button>
       </Card>
 
       <Card>
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
           My action items across all meetings
         </h3>
         <div className="flex flex-col divide-y divide-base-700">

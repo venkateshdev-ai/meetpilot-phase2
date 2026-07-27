@@ -41,7 +41,7 @@ export default function NewTicketPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-1 text-2xl font-bold">New ticket</h1>
+      <h1 className="mb-1 text-2xl font-bold tracking-tight">New ticket</h1>
       <p className="mb-5 text-sm text-slate-400">
         Fill in whatever you know now — you can edit and push to a connected tool later.
       </p>

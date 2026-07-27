@@ -27,7 +27,7 @@ export default async function TicketsPage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="mb-1 text-2xl font-bold">Tickets</h1>
+          <h1 className="mb-1 text-2xl font-bold tracking-tight">Tickets</h1>
           <p className="text-sm text-slate-400">Full specs, ready to push to Jira, Asana, Trello, or Slack.</p>
         </div>
         <Link href="/tickets/new">

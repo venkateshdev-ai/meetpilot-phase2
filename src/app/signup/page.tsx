@@ -46,10 +46,10 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-base-700 bg-base-800/60 p-8">
+    <main className="flex min-h-screen items-center justify-center bg-hero-glow px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-base-700/80 bg-base-800/60 p-8 shadow-card backdrop-blur-sm">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <span className="h-12 w-12 rounded-2xl bg-brand-gradient" />
+          <span className="h-12 w-12 rounded-2xl bg-brand-gradient shadow-glow" />
           <h1 className="text-xl font-bold">Create your account</h1>
           <p className="text-sm text-slate-400">Start booking meetings in minutes</p>
         </div>
