@@ -98,7 +98,7 @@ export default function GlobalSearch() {
   }
 
   return (
-    <div ref={boxRef} className="relative w-64">
+    <div ref={boxRef} className="relative w-full min-w-0 sm:w-64">
       <div className="flex items-center gap-2 rounded-xl border border-base-700 bg-base-900 px-3 py-2 text-sm transition-colors focus-within:border-accent-500">
         {loading ? (
           <Loader2 size={15} className="shrink-0 animate-spin text-slate-500" />
@@ -114,10 +114,12 @@ export default function GlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search meetings, requests…"
-          className="w-full bg-transparent text-slate-200 placeholder:text-slate-600 focus:outline-none"
+          placeholder="Search…"
+          className="w-full min-w-0 bg-transparent text-slate-200 placeholder:text-slate-600 focus:outline-none"
         />
-        <kbd className="shrink-0 rounded border border-base-700 px-1.5 text-[10px] text-slate-600">⌘K</kbd>
+        <kbd className="hidden shrink-0 rounded border border-base-700 px-1.5 text-[10px] text-slate-600 lg:inline">
+          ⌘K
+        </kbd>
       </div>
 
       {open && q.trim().length >= 2 && (

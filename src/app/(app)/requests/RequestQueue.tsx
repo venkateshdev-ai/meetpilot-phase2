@@ -171,13 +171,15 @@ export default function RequestQueue({
             const assignee = t.assigneeId ? usersById[t.assigneeId] : undefined;
             const isDone = t.status === "DONE";
             return (
-              <div key={t.id} className="flex flex-wrap items-center gap-3 p-4">
+              <div key={t.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={PRIORITY_TONE[t.priority]}>{t.priority}</Badge>
+                    {/* Wraps on narrow screens rather than truncating to a few
+                        characters — a request you can't read isn't triageable. */}
                     <Link
                       href={`/tickets/${t.id}`}
-                      className="truncate text-sm font-medium text-slate-100 hover:text-accent-400"
+                      className="min-w-0 text-sm font-medium text-slate-100 hover:text-accent-400 sm:truncate"
                     >
                       {t.title}
                     </Link>
@@ -217,7 +219,9 @@ export default function RequestQueue({
                   </span>
                 )}
 
-                <Badge tone={STATUS_TONE[t.status] ?? "neutral"}>{t.status.replace("_", " ")}</Badge>
+                <div className="flex items-center gap-2 sm:contents">
+                  <Badge tone={STATUS_TONE[t.status] ?? "neutral"}>{t.status.replace("_", " ")}</Badge>
+                </div>
 
                 {canTriage && !isDone && t.priority !== "P0" && (
                   <Button

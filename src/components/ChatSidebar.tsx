@@ -77,8 +77,11 @@ export default function ChatSidebar({ currentUserName }: { currentUserName: stri
     );
   }
 
+  // Full-screen sheet on small viewports; a docked rail from lg up. As a
+  // plain sticky sibling it added a fixed 320px column, which on a phone left
+  // almost nothing for the page itself.
   return (
-    <aside className="sticky top-0 flex h-screen w-80 shrink-0 flex-col border-l border-base-700 bg-base-800/60">
+    <aside className="fixed inset-0 z-40 flex h-screen flex-col border-l border-base-700 bg-base-800 lg:sticky lg:inset-auto lg:top-0 lg:z-auto lg:w-80 lg:shrink-0 lg:bg-base-800/60">
       <div className="flex items-center justify-between border-b border-base-700 px-4 py-3.5">
         <div className="flex items-center gap-2">
           <MessageSquare size={16} className="text-accent-400" />
